@@ -142,6 +142,7 @@ class commands:
 		self.devices = command("devices")
 		
 		#Device Commands
+		self.mtp = device_command("shell svc usb setFunctions mtp true")
 		self.usb = device_command("usb", _command_usb_helper) #Disables the remote TCP/IP port
 		self.disconnect = device_command("disconnect", _command_disconnect_helper) #Disconnects from device locally
 		self.tcp_ip = device_command("tcpip", c.get_tcp_port)
@@ -172,7 +173,13 @@ class commands:
 c = config()
 cmd = commands()
 # </editor-fold>
-q = 0
+
+d = cmd.get_devices()
+for i in d:
+	if ":" not in i:
+		cmd.connect.call(device = i)
+
+"""q = 0
 while q < 2:
 	cmd.devices.call()
 	d = cmd.get_devices()
@@ -194,3 +201,4 @@ while q < 2:
 			toast(str(dvc) + " devices found")
 	
 	q += 1
+"""
