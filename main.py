@@ -1,5 +1,6 @@
 import subprocess
 import random
+import time
 import pystray
 from PIL import Image
 import base64
@@ -85,6 +86,8 @@ def _command_local_ip_helper(device):
 # <editor-fold desc="Ini Functions">
 def unify(string, substring = "="):
 	if string.count(substring) == 0 or string.startswith("#"):
+		if substring == "#":
+			string = string.replace(substring + " ", substring)
 		return string
 	else:
 		string = string.replace(" " + substring, substring)
@@ -92,7 +95,7 @@ def unify(string, substring = "="):
 		string = string.replace(" " + substring + " ", substring)
 		return string
 
-def ini(key, value = False, _p = path):
+def ini(key, value = False, _p = path, read_comments = True):
 	_p = resolve(_p)
 	if os.path.isdir(_p):  # If path is not a file
 		_p = os.path.join(_p, "config.ini")  # Propose a config file in that path
@@ -102,9 +105,13 @@ def ini(key, value = False, _p = path):
 		if isinstance(value, bool) and not value:  # If this is a read operation
 			with open(_p, "r") as f:
 				for line in f:
-					dictionary = unify(line).split("=")
-					if dictionary[0] == str(key):
-						return str(dictionary[1])  # Return the value if it exists
+					if "=" in line:
+						dictionary = unify(line).split("=")
+						if dictionary[0] == str(key):
+							return str(dictionary[1])  # Return the value if it exists
+					elif read_comments:
+						if key == str(unify(line)[1:]):
+							return True
 				return False  # Return False if it doesn't exist
 		
 		else:  # If this is a write operation
@@ -144,7 +151,7 @@ def ini(key, value = False, _p = path):
 	else:  # If the config file doesn't exist
 		open(_p, "w+").close()  # Create the config file
 		with open(_p, "r+") as _cfg:
-			_cfg.write("#Config Version 2.1" + "\n")  # Comment the config version
+			_cfg.write("#Config Version 2.2" + "\n")  # Comment the config version
 			if not isinstance(value, bool):  # If this is a write operation
 				_cfg.write(str(key) + "=" + str(value) + "\n")  # Add the key/value pair in
 				return True
@@ -281,12 +288,21 @@ cfg = ini("_") #Create the config file if it hasn't been created already
 c = config()
 cmd = commands()
 
+def setup():
+	while not ini("stop"):
+		time.sleep(1)
+	print("stopped")
+
 icon = pystray.Icon("ADB Tools")
 
-toast("test", icon_path = ico_path)
+#toast("test", icon_path = ico_path)
 # </editor-fold>
 
+setup()
+
+"""
 rgba_image = Image.open(png_path)
 rgba_image.load()
 icon.icon = rgba_image
 icon.run()
+"""
