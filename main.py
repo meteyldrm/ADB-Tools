@@ -91,20 +91,22 @@ def unify(string, substring = "="):
 			string = string.replace(substring + " ", substring)
 		return string
 	else:
-		string = string.replace(" " + substring, substring)
-		string = string.replace(substring + " ", substring)
-		string = string.replace(" " + substring + " ", substring)
-		return string
+		q = "=".join([a.lstrip().rstrip() for a in string.split(substring)])
+		
+		return q
 
 def ini(key, value = False, t_p = path):
 	t_p = resolve(t_p)
 	
+	#TODO: Rewrite operations to accept booleans instead of True/None and default value to None
+	
 	_p = os.path.join(t_p, "config.ini")  # Propose a config file in that path
 	available = os.path.exists(_p)
 	if available:  # If the config file exists
-		if isinstance(value, bool) and not value and value is not None:  # If this is a read operation
+		if isinstance(value, bool) and not value:  # If this is a read operation
 			with open(_p, "r") as f:
 				for line in f:
+					line = line.replace("\n", "")
 					if "=" in line:
 						dictionary = unify(line).split("=")
 						if dictionary[0] == str(key):
@@ -123,6 +125,7 @@ def ini(key, value = False, t_p = path):
 				with open(_p, "r") as f:  # Open the file to be written on
 					exists = False
 					for line in f:
+						line = line.replace("\n", "")
 						if line.startswith("#"):  # Process comments
 							if key.startswith("#"):
 								if unify(key, substring = "#") == unify(line, substring = "#"):
@@ -130,19 +133,25 @@ def ini(key, value = False, t_p = path):
 									if value is None:
 										pass
 									elif value:
-										temp.write(line)
+										temp.write(line + "\n")
 									pass
+								else:
+									temp.write(line + "\n")
 						else:
 							dictionary = unify(line).split("=")
 							if dictionary[0] == str(key):  # If the key is to be overwritten
 								exists = True
 								if str(dictionary[1]) != str(value):  # And its value isn't already equal to the value to be written
 									temp.write(str(key) + "=" + str(value) + "\n")  # Write changes
+								elif value is None: # Delete key
+									pass
+								else: # Key/value pairs are the same
+									temp.write(line + "\n")
 							else:  # Write every other line which doesn't contain the key
-								temp.write(line)
+								temp.write(line + "\n")
 					if not exists:  # If the key isn't in the file
 						if key.startswith("#"):
-							if value and value is not None:
+							if value and value is not None: # Add flag when value is True
 								temp.write(str(key) + "\n")
 						else:
 							temp.write(str(key) + "=" + str(value) + "\n")  # Add the key/value pair in
@@ -153,7 +162,6 @@ def ini(key, value = False, t_p = path):
 					with open(temp_path, "r") as temp:
 						for line in temp:  # Copy the temporary file to the original line by line
 							f.write(str(line))
-							f.flush()
 				os.unlink(temp_path)  # Delete the temporary file
 				return True  # Return True if successful
 			except Exception as e:
@@ -164,8 +172,10 @@ def ini(key, value = False, t_p = path):
 		open(_p, "w+").close()  # Create the config file
 		with open(_p, "r+") as _cfg:
 			_cfg.write("#Config Version 2.2" + "\n")  # Comment the config version
-			_cfg.flush()
-			if not isinstance(value, bool):  # If this is a write operation
+			if value and key.startswith("#"):
+				_cfg.write(str(key) + "\n")
+				return True
+			elif not isinstance(value, bool) and value is not None:  # If this is a write operation
 				_cfg.write(str(key) + "=" + str(value) + "\n")  # Add the key/value pair in
 				return True
 			else:  # Return False for a read operation
@@ -296,13 +306,11 @@ class commands:
 		return device_list
 
 # <editor-fold desc="Config Extensions">
-ini("_") #Create the config file if it hasn't been created already
-ini("#Extensions Version 1.0", True)
+ini("#Extensions Version 1.0", True) #Create the config file if it hasn't been created already
 
 def ini_extensions():
 	if ini("#reset"):
 		os.unlink(os.path.join(path, "config.ini"))
-		ini("_")
 		ini("#Extensions Version 1.0", True)
 
 # </editor-fold>
@@ -314,7 +322,7 @@ cmd = commands()
 
 def setup(_icon):
 	_icon.visible = True
-	y = 0
+	ini_extensions()
 	while not ini("#stop"):
 		time.sleep(1)
 		ini_extensions()
