@@ -24,7 +24,8 @@ except:
 def resolve(_path):
 	if sys.platform == "win32":
 		if len(_path) > 255:
-			_path = "\\\\?\\" + _path
+			if not path.startswith("\\\\?\\"):
+				_path = "\\\\?\\" + _path
 		return _path
 	else:
 		return _path
@@ -95,46 +96,56 @@ def unify(string, substring = "="):
 		string = string.replace(" " + substring + " ", substring)
 		return string
 
-def ini(key, value = False, _p = path, read_comments = True):
-	_p = resolve(_p)
-	if os.path.isdir(_p):  # If path is not a file
-		_p = os.path.join(_p, "config.ini")  # Propose a config file in that path
+def ini(key, value = False, t_p = path):
+	t_p = resolve(t_p)
+	
+	_p = os.path.join(t_p, "config.ini")  # Propose a config file in that path
 	available = os.path.exists(_p)
 	if available:  # If the config file exists
-		
-		if isinstance(value, bool) and not value:  # If this is a read operation
+		if isinstance(value, bool) and not value and value is not None:  # If this is a read operation
 			with open(_p, "r") as f:
 				for line in f:
 					if "=" in line:
 						dictionary = unify(line).split("=")
 						if dictionary[0] == str(key):
 							return str(dictionary[1])  # Return the value if it exists
-					elif read_comments:
-						if key == str(unify(line)[1:]):
+					elif key.startswith("#"):
+						if key == str(unify(line, substring = "#")):
 							return True
 				return False  # Return False if it doesn't exist
 		
 		else:  # If this is a write operation
 			try:
 				name = str(uuid.uuid1()).replace("-", "") + ".ini"  # Create a temporary file
-				temp_path = os.path.join(_p, name)
+				temp_path = os.path.join(t_p, name)
 				open(temp_path, "w+").close()
 				temp = open(temp_path, "a")
 				with open(_p, "r") as f:  # Open the file to be written on
 					exists = False
 					for line in f:
-						if line.startswith("#"):  # Don't process comments
-							temp.write(line)
-							pass
-						dictionary = unify(line).split("=")
-						if dictionary[0] == str(key):  # If the key is to be overwritten
-							exists = True
-							if str(dictionary[1]) != str(value):  # And its value isn't already equal to the value to be written
-								temp.write(str(key) + "=" + str(value) + "\n")  # Write changes
-						else:  # Write every other line which doesn't contain the key
-							temp.write(line)
+						if line.startswith("#"):  # Process comments
+							if key.startswith("#"):
+								if unify(key, substring = "#") == unify(line, substring = "#"):
+									exists=True
+									if value is None:
+										pass
+									elif value:
+										temp.write(line)
+									pass
+						else:
+							dictionary = unify(line).split("=")
+							if dictionary[0] == str(key):  # If the key is to be overwritten
+								exists = True
+								if str(dictionary[1]) != str(value):  # And its value isn't already equal to the value to be written
+									temp.write(str(key) + "=" + str(value) + "\n")  # Write changes
+							else:  # Write every other line which doesn't contain the key
+								temp.write(line)
 					if not exists:  # If the key isn't in the file
-						temp.write(str(key) + "=" + str(value) + "\n")  # Add the key/value pair in
+						if key.startswith("#"):
+							if value and value is not None:
+								temp.write(str(key) + "\n")
+						else:
+							temp.write(str(key) + "=" + str(value) + "\n")  # Add the key/value pair in
 				temp.close()
 				
 				open(_p, "w+").close()  # Truncate the original file
@@ -142,6 +153,7 @@ def ini(key, value = False, _p = path, read_comments = True):
 					with open(temp_path, "r") as temp:
 						for line in temp:  # Copy the temporary file to the original line by line
 							f.write(str(line))
+							f.flush()
 				os.unlink(temp_path)  # Delete the temporary file
 				return True  # Return True if successful
 			except Exception as e:
@@ -152,6 +164,7 @@ def ini(key, value = False, _p = path, read_comments = True):
 		open(_p, "w+").close()  # Create the config file
 		with open(_p, "r+") as _cfg:
 			_cfg.write("#Config Version 2.2" + "\n")  # Comment the config version
+			_cfg.flush()
 			if not isinstance(value, bool):  # If this is a write operation
 				_cfg.write(str(key) + "=" + str(value) + "\n")  # Add the key/value pair in
 				return True
@@ -281,28 +294,38 @@ class commands:
 				else: #Emulators are ignored
 					device_list.append(get_device(line))
 		return device_list
-		
+
+# <editor-fold desc="Config Extensions">
+ini("_") #Create the config file if it hasn't been created already
+ini("#Extensions Version 1.0", True)
+
+def ini_extensions():
+	if ini("#reset"):
+		os.unlink(os.path.join(path, "config.ini"))
+		ini("_")
+		ini("#Extensions Version 1.0", True)
+
+# </editor-fold>
+
 # <editor-fold desc="Post-Initializers">
-cfg = ini("_") #Create the config file if it hasn't been created already
 
 c = config()
 cmd = commands()
 
-def setup():
-	while not ini("stop"):
+def setup(_icon):
+	_icon.visible = True
+	y = 0
+	while not ini("#stop"):
 		time.sleep(1)
-	print("stopped")
+		ini_extensions()
+	_icon.stop()
 
 icon = pystray.Icon("ADB Tools")
 
 #toast("test", icon_path = ico_path)
 # </editor-fold>
 
-setup()
-
-"""
 rgba_image = Image.open(png_path)
 rgba_image.load()
 icon.icon = rgba_image
-icon.run()
-"""
+icon.run(setup)
