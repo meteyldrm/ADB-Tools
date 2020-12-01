@@ -34,7 +34,6 @@ try:
 except:
 	pass
 
-
 def resolve(_path):
 	if sys.platform == "win32":
 		if len(_path) > 255:
@@ -65,7 +64,7 @@ if not os.path.exists(ico_path):
 	with open(ico_path, "wb") as p:
 		p.write(base64.decodebytes(ico_256.encode()))
 
-def toast(notification, title="ADB Tools", icon_path = None, duration=3):
+def toast(notification, title="ADB Tools", icon_path = png_path, duration=3):
 	try:
 		tst.show_toast(title, notification, icon_path, duration)
 	except:
@@ -109,7 +108,7 @@ def unify(string, substring = "="):
 		
 		return q
 
-def ini(key, value = False, t_p = path):
+def ini(key: str, value: object = None, t_p: str = path) -> object:
 	t_p = resolve(t_p)
 	
 	#TODO: Rewrite operations to accept booleans instead of True/None and default value to None
@@ -117,7 +116,7 @@ def ini(key, value = False, t_p = path):
 	_p = os.path.join(t_p, "config.ini")  # Propose a config file in that path
 	available = os.path.exists(_p)
 	if available:  # If the config file exists
-		if isinstance(value, bool) and not value:  # If this is a read operation
+		if not isinstance(value, bool) and value is None:  # If this is a read operation
 			with open(_p, "r") as f:
 				for line in f:
 					line = line.replace("\n", "")
@@ -141,31 +140,30 @@ def ini(key, value = False, t_p = path):
 					for line in f:
 						line = line.replace("\n", "")
 						if line.startswith("#"):  # Process comments
-							if key.startswith("#"):
-								if unify(key, substring = "#") == unify(line, substring = "#"):
-									exists=True
-									if value is None:
-										pass
-									elif value:
-										temp.write(line + "\n")
+							if unify(key, substring = "#") == unify(line, substring = "#") and key.startswith("#"):
+								exists = True
+								if not value:
 									pass
-								else:
+								elif value:
 									temp.write(line + "\n")
+								pass
+							else:
+								temp.write(line + "\n")
 						else:
 							dictionary = unify(line).split("=")
 							if dictionary[0] == str(key):  # If the key is to be overwritten
 								exists = True
-								if str(dictionary[1]) != str(value):  # And its value isn't already equal to the value to be written
+								if str(dictionary[1]) != str(value) and not isinstance(value, bool):  # And its value isn't already equal to the value to be written
 									temp.write(str(key) + "=" + str(value) + "\n")  # Write changes
-								elif value is None: # Delete key
+								elif not value and isinstance(value, bool): # Delete key
 									pass
-								else: # Key/value pairs are the same
+								else: # Key/value pairs are supposed to be the same
 									temp.write(line + "\n")
 							else:  # Write every other line which doesn't contain the key
 								temp.write(line + "\n")
 					if not exists:  # If the key isn't in the file
 						if key.startswith("#"):
-							if value and value is not None: # Add flag when value is True
+							if value: # Add flag when value is True
 								temp.write(str(key) + "\n")
 						else:
 							temp.write(str(key) + "=" + str(value) + "\n")  # Add the key/value pair in
