@@ -1,18 +1,32 @@
+# <editor-fold desc="Import">
 import subprocess
 import random
 import time
-import pystray
-from PIL import Image
-import base64
 import os
 import sys
 import uuid
 
+toast = False
+tray = False
+
 try:
 	# noinspection PyUnresolvedReferences
 	import win10toast
+	toast = True
 except ImportError:
-	pass
+	toast = False
+	
+try:
+	# noinspection PyUnresolvedReferences
+	import pystray
+	# noinspection PyUnresolvedReferences
+	from PIL import Image
+	# noinspection PyUnresolvedReferences
+	import base64
+	tray = True
+except ImportError:
+	tray = False
+# </editor-fold>
 
 # <editor-fold desc="Initializers">
 try:
@@ -84,7 +98,7 @@ def _command_local_ip_helper(device):
 	
 # </editor-fold>
 
-# <editor-fold desc="Ini Functions">
+# <editor-fold desc="Config Functions">
 def unify(string, substring = "="):
 	if string.count(substring) == 0 or string.startswith("#"):
 		if substring == "#":
@@ -182,6 +196,7 @@ def ini(key, value = False, t_p = path):
 				return False
 # </editor-fold>
 
+# <editor-fold desc="ADB Skeleton">
 class config:
 	sleep = 1
 	tcp_port = "50155"
@@ -304,6 +319,7 @@ class commands:
 				else: #Emulators are ignored
 					device_list.append(get_device(line))
 		return device_list
+# </editor-fold>
 
 # <editor-fold desc="Config Extensions">
 ini("#Extensions Version 1.0", True) #Create the config file if it hasn't been created already
@@ -316,24 +332,26 @@ def ini_extensions():
 # </editor-fold>
 
 # <editor-fold desc="Post-Initializers">
-
 c = config()
 cmd = commands()
 
 def setup(_icon):
 	_icon.visible = True
+	loop()
+	_icon.stop()
+
+def loop():
 	ini_extensions()
 	while not ini("#stop"):
 		time.sleep(1)
 		ini_extensions()
-	_icon.stop()
-
-icon = pystray.Icon("ADB Tools")
-
-#toast("test", icon_path = ico_path)
 # </editor-fold>
 
-rgba_image = Image.open(png_path)
-rgba_image.load()
-icon.icon = rgba_image
-icon.run(setup)
+if tray:
+	icon = pystray.Icon("ADB Tools")
+	rgba_image = Image.open(png_path)
+	rgba_image.load()
+	icon.icon = rgba_image
+	icon.run(setup)
+else:
+	loop()
