@@ -5,6 +5,7 @@ import time
 import os
 import sys
 import uuid
+#import json
 
 toast = False
 tray = False
@@ -72,22 +73,22 @@ def toast(notification, title="ADB Tools", icon_path = png_path, duration=3):
 	
 	#TODO: Most of the functions need to ignore TCP devices
 	
-def _command_connect_helper(device):
-	c.ip_addr(device, ip=_command_local_ip_helper(device))
-	cmd.tcp_ip.call(device=device)
-	return c.ip_addr(device) + ":" + c.get_tcp_port(device)
+def _command_connect_helper(dvc):
+	c.ip_addr(dvc, ip=_command_local_ip_helper(dvc))
+	cmd.tcp_ip.call(dvc =dvc)
+	return c.ip_addr(dvc) + ":" + c.get_tcp_port(dvc)
 
-def _command_disconnect_helper(device):
-	return c.ip_addr(device) + ":" + c.get_tcp_port(device)
+def _command_disconnect_helper(dvc):
+	return c.ip_addr(dvc) + ":" + c.get_tcp_port(dvc)
 
-def _command_usb_helper(device):
-	return c.ip_addr(device) + ":" + c.get_tcp_port(device)
+def _command_usb_helper(dvc):
+	return c.ip_addr(dvc) + ":" + c.get_tcp_port(dvc)
 
-def _command_local_ip_helper(device):
-	if device in c.connected_ip_addr.keys():
-		return c.ip_addr(device)
+def _command_local_ip_helper(dvc):
+	if dvc in c.connected_ip_addr.keys():
+		return c.ip_addr(dvc)
 	else:
-		result = cmd.local_ip.call(device=device)
+		result = cmd.local_ip.call(dvc =dvc)
 		result = result.strip()
 		for line in result.split("\n"):
 			line = line.strip()
@@ -97,22 +98,68 @@ def _command_local_ip_helper(device):
 	
 # </editor-fold>
 
-# <editor-fold desc="Config Functions">
+# <editor-fold desc="Config Functionality">
 def unify(string, substring = "="):
 	if string.count(substring) == 0 or string.startswith("#"):
 		if substring == "#":
-			string = string.replace(substring + " ", substring)
+			string = "#" + string[1:].lstrip()
 		return string
 	else:
 		q = "=".join([a.lstrip().rstrip() for a in string.split(substring)])
 		
 		return q
 
+class Ini:
+	config_name = None
+	main_path = None
+	
+	temp_files = []
+	
+	#TODO: Add continuous mode for temp file persistence and stuff
+	
+	# <editor-fold desc="Helper Functions">
+	@staticmethod
+	def _unify(string):
+		if string.startswith("#"):
+			return "#" + string[1:].lstrip()
+		elif "=" in string:
+			return "=".join([a.lstrip().rstrip() for a in string.split("=")])
+	
+	@staticmethod
+	def _resolve(_path):
+		if sys.platform == "win32":
+			if len(_path) > 255:
+				if not path.startswith("\\\\?\\"):
+					_path = "\\\\?\\" + _path
+			return _path
+		else:
+			return _path
+	# </editor-fold>
+	
+	#.ini checks included
+	def create_file(self, name = None, mode = "r+", safe = True):
+		if name is None:
+			name = str(uuid.uuid1()).replace("-", "") + ".ini"
+			self.temp_files.append(os.path.join(self.main_path, name))
+		elif not name.endswith(".ini"):
+			name += ".ini"
+		
+		_path = os.path.join(self.main_path, name)
+		if safe:
+			if not(os.path.exists(_path) and os.path.isfile(_path)):
+				open(_path, "w+").close()
+			return open(_path, mode)
+		else:
+			open(_path, "w+").close()
+			return open(_path, mode)
+	
+	def __init__(self, config_name = "config", config_path = os.getcwd()):
+		self.config_name = config_name
+		self.main_path = self._resolve(config_path)
+		
+
 def ini(key: str, value: object = None, t_p: str = path) -> object:
 	t_p = resolve(t_p)
-	
-	#TODO: Rewrite operations to accept booleans instead of True/None and default value to None
-	
 	_p = os.path.join(t_p, "config.ini")  # Propose a config file in that path
 	available = os.path.exists(_p)
 	if available:  # If the config file exists
@@ -120,13 +167,14 @@ def ini(key: str, value: object = None, t_p: str = path) -> object:
 			with open(_p, "r") as f:
 				for line in f:
 					line = line.replace("\n", "")
-					if "=" in line:
-						dictionary = unify(line).split("=")
-						if dictionary[0] == str(key):
-							return str(dictionary[1])  # Return the value if it exists
-					elif key.startswith("#"):
-						if key == str(unify(line, substring = "#")):
-							return True
+					if not line.startswith("!#"):
+						if "=" in line:
+							dictionary = unify(line).split("=")
+							if dictionary[0] == str(key):
+								return str(dictionary[1])  # Return the value if it exists
+						elif key.startswith("#"):
+							if key == str(unify(line, substring = "#")):
+								return True
 				return False  # Return False if it doesn't exist
 		
 		else:  # If this is a write operation
@@ -204,36 +252,37 @@ class config:
 	connected_ip_addr = {}
 	used_tcp_ports = {}
 	
-	def get_tcp_port(self, device):
-		if device in self.used_tcp_ports.keys():
-			return self.used_tcp_ports[device]
+	def get_tcp_port(self, dvc):
+		if dvc in self.used_tcp_ports.keys():
+			return self.used_tcp_ports[dvc]
 		if not self.random_port:
 			while self.tcp_port in self.used_tcp_ports:
 				self.tcp_port = str(int(self.tcp_port) + 2)
-			self.used_tcp_ports[device] = self.tcp_port
+			self.used_tcp_ports[dvc] = self.tcp_port
 			return self.tcp_port
 		else:
 			while self.tcp_port in self.used_tcp_ports:
 				self.tcp_port = str(random.randint(*self.tcp_port_range, 2))
-			self.used_tcp_ports[device] = self.tcp_port
+			self.used_tcp_ports[dvc] = self.tcp_port
 			return self.tcp_port
 		
-	def ip_addr(self, device, ip=None):
-		if device in self.connected_ip_addr.keys():
-			return self.connected_ip_addr[device]
+	def ip_addr(self, dvc, ip=None):
+		if dvc in self.connected_ip_addr.keys():
+			return self.connected_ip_addr[dvc]
 		else:
-			self.connected_ip_addr[device] = str(ip)
+			self.connected_ip_addr[dvc] = str(ip)
 			
 	def get_device_count(self, devices):
 		count = 0
-		for device in devices:
-			if ":" not in device:
-				if not self.is_duplicate_device(device):
+		#TODO: Re-define device as a class to consider USB-Only or TCP-Only states
+		for dvc in devices:
+			if ":" not in dvc:
+				if not self.is_duplicate_device(dvc):
 					count += 1
 		return count
 	
-	def is_duplicate_device(self, device):
-		if device in self.connected_ip_addr.keys() and device in self.used_tcp_ports.keys():
+	def is_duplicate_device(self, dvc):
+		if dvc in self.connected_ip_addr.keys() and dvc in self.used_tcp_ports.keys():
 			return True
 		else:
 			return False
@@ -273,11 +322,11 @@ class device_command:
 	def __repr__(self):
 		return self.output
 	
-	def call(self, *, device=None, stdout=True):
+	def call(self, *, dvc=None, stdout=True):
 		if self.func is None:
-			value = "adb -s " + device.strip() + " " + self.value
+			value = "adb -s " + dvc.strip() + " " + self.value
 		else:
-			value = "adb -s " + device.strip() + " " + self.value + " " + self.func(device.strip())
+			value = "adb -s " + dvc.strip() + " " + self.value + " " + self.func(dvc.strip())
 		if self.pipe is None:
 			self.pipe = shell(value, stdout)
 		self.output = self.pipe.decode()
@@ -297,26 +346,62 @@ class commands:
 		self.tcp_ip = device_command("tcpip", c.get_tcp_port)
 		self.connect = device_command("connect", _command_connect_helper)
 		self.local_ip = device_command("shell ip addr show wlan0")
+		self.android_id = device_command("shell settings get secure android_id")
 	
 	def get_devices(self, ignore_emulators=True):
 		def get_device(string):
 			device_id = string.split("\t")[0]
 			if len(device_id) > 0:
-				return device_id
+				return device_id.lstrip().rstrip()
 			
 		device_list = []
 		
 		out = self.devices.call()
+		read = False
 		for line in out.split("\n"):
 			line=line.rstrip()
 			if line == "" or len(line)<1:
 				continue
-			if "List of devices attached" not in line:
+			if "List of devices attached" in line:
+				read = True
+				continue
+			if "List of devices attached" not in line and read:
 				if not ignore_emulators and line.startswith("emulator"): #Emulator inclusive
 					device_list.append(get_device(line))
 				else: #Emulators are ignored
 					device_list.append(get_device(line))
 		return device_list
+	
+class device:
+	def __init__(self, device_id):
+		self.android_id = None
+		
+		self.emulator = None
+		self.usb = None
+		self.tcp = None
+		
+		self.identify(device_id)
+	
+	def identify(self, device_id = ""):
+		if device_id.startswith("emulator"):
+			self.emulator = device_id
+		elif ":" in device_id and "." in device_id:
+			self.tcp = device_id
+		else:
+			self.usb = device_id
+
+class device_manager:
+	def __init__(self, commands_instance: commands):
+		self.devices = []
+		self.commands = commands_instance
+		
+	def add_devices(self, device_list):
+		for device_id in device_list:
+			self.devices.append(device(device_id))
+		
+	def add(self, device_id = ""):
+		pass
+	
 # </editor-fold>
 
 # <editor-fold desc="Config Extensions">
@@ -332,6 +417,8 @@ def ini_extensions():
 # <editor-fold desc="Post-Initializers">
 c = config()
 cmd = commands()
+
+cmd.start_server.call()
 
 def setup(_icon):
 	_icon.visible = True
