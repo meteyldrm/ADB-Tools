@@ -5,7 +5,6 @@ import time
 import os
 import sys
 import uuid
-#import json
 
 toast = False
 tray = False
@@ -71,25 +70,32 @@ def toast(notification, title="ADB Tools", icon_path = png_path, duration=3):
 		tst.show_toast(title, notification, icon_path, duration)
 	except:
 		pass
-	
-	#TODO: Most of the functions need to ignore TCP devices
-	
+
+def _assert_usb(dvc): #Is this a (currently) physically connected usb device
+	return dvc in cmd.get_devices(True, True)
+
 def _command_connect_helper(dvc):
-	c.ip_addr(dvc, ip=_command_local_ip_helper(dvc))
-	cmd.tcp_ip.call(dvc =dvc)
-	return c.ip_addr(dvc) + ":" + c.get_tcp_port(dvc)
+	if _assert_usb(dvc):
+		c.ip_addr(dvc, ip = _command_local_ip_helper(dvc))
+		cmd.tcp_ip.call(dvc = dvc)
+		if ini.read(tcp_caching) == "True":
+			ini.write(dvc + "_tcp_cache", c.ip_addr(dvc) + ":" + c.get_tcp_port(dvc))
+		return c.ip_addr(dvc) + ":" + c.get_tcp_port(dvc)
+
+	return ini.read(dvc + "_tcp_cache")
 
 def _command_disconnect_helper(dvc):
 	return c.ip_addr(dvc) + ":" + c.get_tcp_port(dvc)
 
 def _command_usb_helper(dvc):
+	ini.write(dvc + "_tcp_cache", None)
 	return c.ip_addr(dvc) + ":" + c.get_tcp_port(dvc)
 
 def _command_local_ip_helper(dvc):
 	if dvc in c.connected_ip_addr.keys():
 		return c.ip_addr(dvc)
 	else:
-		result = cmd.local_ip.call(dvc =dvc)
+		result = cmd.local_ip.call(dvc=dvc)
 		result = result.strip()
 		for line in result.split("\n"):
 			line = line.strip()
@@ -100,24 +106,15 @@ def _command_local_ip_helper(dvc):
 # </editor-fold>
 
 # <editor-fold desc="Config Functionality">
-def unify(string, substring = "="):
-	if string.count(substring) == 0 or string.startswith("#"):
-		if substring == "#":
-			string = "#" + string[1:].lstrip()
-		return string
-	else:
-		q = "=".join([a.lstrip().rstrip() for a in string.split(substring)])
-		
-		return q
-
 class Ini:
 	temp_files = []
 	
 	# <editor-fold desc="Helper Functions">
 	@staticmethod
 	def _unify(string):
+		string = string.replace("\n", "")
 		if string.startswith("#"):
-			return "#" + string[1:].lstrip()
+			return "#" + string[1:].lstrip().rstrip()
 		elif "=" in string:
 			return "=".join([a.lstrip().rstrip() for a in string.split("=")])
 	
@@ -158,36 +155,84 @@ class Ini:
 	def read(self, key):
 		with open(self.main_config, "r") as f:
 			for line in f:
-				line = self._unify(line.replace("\n", ""))
+				if line.startswith("#"):
+					continue
+				line = self._unify(line)
 				if key in line:
 					if line.split("=")[0] == key:
 						return line.split("=")[1]
 			return None
 		
-	def write(self, key, value):
+	def read_flag(self, flag: str):
+		if flag.startswith("#"):
+			flag = flag.lstrip("#")
+		with open(self.main_config, "r") as f:
+			for line in f:
+				if self._unify(line) == flag:
+					return True
+			return False
+		
+	def write(self, key, value, safe = False):
+		#Safe mode ensures the existence of the key, used to create the default config
+		#Value == None behavior is undefined in safe mode, nothing is changed
+		#Safe == False is normal override behavior
 		with open(self.main_config, "r+") as f:
 			with self.create_file() as temp:
 				append = True
 				for line in f:
-					line = self._unify(line.replace("\n", ""))
+					line = self._unify(line)
 					if line.split("=")[0] != key:
 						temp.write(line + "\n")
 					else:
 						append = False
-						if value is not None:
+						if value is not None and not safe:
 							temp.write(key + "=" + value + "\n")
 						else:
-							pass
+							continue
 				if append:
 					if value is not None:
 						temp.write(key + "=" + value + "\n")
-					else:
-						pass
+				f.flush()
+				temp.flush()
 				f.truncate(0)
+				f.seek(0)
+				temp.seek(0)
 				for line in temp:
 					f.write(line)
+				f.flush()
+		self._delete_temp_files()
+		
+	def write_flag(self, flag: str, value: bool):
+		with open(self.main_config, "r+") as f:
+			with self.create_file() as temp:
+				append = value
+				for line in f:
+					if line.startswith("#"):
+						line = self._unify(line)
+						if flag == line:
+							if value:
+								temp.write(line + "\n")
+								append = False
+							else:
+								continue
+						else:
+							temp.write(line + "\n")
+				if append:
+					temp.write("#" + flag.lstrip("#") + "\n")
+				
+				f.flush()
+				temp.flush()
+				f.truncate(0)
+				f.seek(0)
+				temp.seek(0)
+				for line in temp:
+					f.write(line)
+				f.flush()
+		self._delete_temp_files()
 	
 	def __init__(self, config_name = "config", config_path = os.getcwd()):
+		if not config_name.endswith(".ini"):
+			config_name += ".ini"
 		self.config_name = config_name
 		self.main_path = self._resolve(config_path)
 		self.main_config = os.path.join(self.main_path, self.config_name)
@@ -196,6 +241,7 @@ class Ini:
 # <editor-fold desc="ADB Skeleton">
 class config:
 	sleep = 1
+	config_sleep = 300
 	tcp_port = "50155"
 	tcp_port_range=(50001,63000)
 	random_port = False
@@ -222,25 +268,6 @@ class config:
 			return self.connected_ip_addr[dvc]
 		else:
 			self.connected_ip_addr[dvc] = str(ip)
-			
-	def get_device_count(self, devices):
-		count = 0
-		#TODO: Re-define device as a class to consider USB-Only or TCP-Only states
-		for dvc in devices:
-			if ":" not in dvc:
-				if not self.is_duplicate_device(dvc):
-					count += 1
-		return count
-	
-	def is_duplicate_device(self, dvc):
-		if dvc in self.connected_ip_addr.keys() and dvc in self.used_tcp_ports.keys():
-			return True
-		else:
-			return False
-	
-	@staticmethod
-	def join(*args):
-		return " ".join([*args])
 
 def shell(_cmd, stdout=True):
 	pipe = subprocess.check_output(_cmd, shell = True)
@@ -299,7 +326,7 @@ class commands:
 		self.local_ip = device_command("shell ip addr show wlan0")
 		self.android_id = device_command("shell settings get secure android_id")
 	
-	def get_devices(self, ignore_emulators=True):
+	def get_devices(self, ignore_tcp=False, ignore_emulators=True):
 		def get_device(string):
 			device_id = string.split("\t")[0]
 			if len(device_id) > 0:
@@ -320,45 +347,32 @@ class commands:
 				if not ignore_emulators and line.startswith("emulator"): #Emulator inclusive
 					device_list.append(get_device(line))
 				else: #Emulators are ignored
-					device_list.append(get_device(line))
+					if not (ignore_tcp and ":" in line): #TCP is ignored
+						device_list.append(get_device(line))
+						
 		return device_list
-	
-class device:
-	def __init__(self, device_id):
-		self.android_id = None
-		
-		self.emulator = None
-		self.usb = None
-		self.tcp = None
-		
-		self.identify(device_id)
-	
-	def identify(self, device_id = ""):
-		if device_id.startswith("emulator"):
-			self.emulator = device_id
-		elif ":" in device_id and "." in device_id:
-			self.tcp = device_id
-		else:
-			self.usb = device_id
-
-class device_manager:
-	def __init__(self, commands_instance: commands):
-		self.devices = []
-		self.commands = commands_instance
-		
-	def add_devices(self, device_list):
-		for device_id in device_list:
-			self.devices.append(device(device_id))
-		
-	def add(self, device_id = ""):
-		pass
-	
 # </editor-fold>
 
 # <editor-fold desc="Post-Initializers">
 ini = Ini()
 c = config()
 cmd = commands()
+
+usb_scan_period="usb_scan_period"
+tcp_caching="tcp_caching"
+tcp_cache_scan_period="tcp_cache_scan_period"
+auto_tcp="auto_tcp"
+auto_mtp="auto_mtp"
+
+# <editor-fold desc="Default Config">
+def default_config():
+	ini.write(usb_scan_period, "5", safe=True)
+	ini.write(tcp_caching, "true", safe=True)
+	ini.write(tcp_cache_scan_period, "60", safe=True)
+	ini.write(auto_tcp, "true", safe=True)
+	ini.write(auto_mtp, "true", safe=True)
+	
+# </editor-fold>
 
 cmd.start_server.call()
 
@@ -368,8 +382,49 @@ def setup(_icon):
 	_icon.stop()
 
 def loop():
-	while not ini("#stop"):
-		time.sleep(1)
+	usb_scan = 0
+	usb_scan_limit = 0
+	tcp_cache = True
+	automatic_tcp = True
+	tcp_scan = 0
+	tcp_scan_limit = 0
+	config_pass = 0
+	
+	devices = set()
+	
+	while True:
+		if config_pass >= c.config_sleep:
+			config_pass = 0
+			if ini.read_flag("stop"):
+				break
+			usb_scan_limit = ini.read(usb_scan_period)
+			tcp_scan_limit = ini.read(tcp_cache_scan_period)
+			tcp_cache = (ini.read(tcp_caching) == "True")
+			automatic_tcp = (ini.read(auto_tcp) == "True")
+			
+		if usb_scan >= usb_scan_limit:
+			usb_scan = 0
+			active_physical_devices = cmd.get_devices(ignore_tcp = True, ignore_emulators = True)
+			devices = devices.union(active_physical_devices)
+			devices = devices.union(ini.read("device_names").split(","))
+			ini.write("device_names", ",".join(devices))
+			for device in active_physical_devices:
+				if tcp_cache: #Update the TCP disk cache from memory cache on every USB pass
+					if ini.read(device + "_tcp_cache") != (ipa := _command_disconnect_helper(device)):
+						ini.write(device + "_tcp_cache", ipa)
+						
+		if tcp_scan >= tcp_scan_limit and automatic_tcp:
+			tcp_scan = 0
+			for dvc in ini.read("device_names").split(","):
+				cmd.connect.call(dvc=dvc)
+				#TODO: Rewrite to not block the main thread
+				#TODO: Exclude currently connected tcp devices
+				#1 sec delay between consecutive calls would be nice also
+	
+		usb_scan += 1
+		tcp_scan += 1
+		config_pass += 1
+		time.sleep(c.sleep)
 # </editor-fold>
 
 if tray:
