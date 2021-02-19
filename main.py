@@ -43,7 +43,7 @@ def resolve(_path):
 	else:
 		return _path
 
-#path = resolve(sys.path[0])
+#path = resolve(sys.path[0]) #TODO: Add this as a script parameter instead
 path = resolve("C:\\ADB Tools Data")
 os.chdir(path)
 
@@ -270,7 +270,7 @@ class config:
 			self.connected_ip_addr[dvc] = str(ip)
 
 def shell(_cmd, stdout=True):
-	pipe = subprocess.check_output(_cmd, shell = True)
+	pipe = subprocess.check_output(_cmd, shell = False)
 	if stdout:
 		print(pipe.decode())
 	return pipe
@@ -301,6 +301,8 @@ class device_command:
 		return self.output
 	
 	def call(self, *, dvc=None, stdout=True):
+		if dvc == "":
+			return
 		if self.func is None:
 			value = "adb -s " + dvc.strip() + " " + self.value
 		else:
@@ -406,7 +408,7 @@ def loop():
 			usb_scan = 0
 			active_physical_devices = cmd.get_devices(ignore_tcp = True, ignore_emulators = True)
 			devices = devices.union(active_physical_devices)
-			devices = devices.union(ini.read("device_names").split(","))
+			devices = devices.union((dn if len(dn := ini.read("device_names"))>0 else "").split(","))
 			ini.write("device_names", ",".join(devices))
 			for device in active_physical_devices:
 				if tcp_cache: #Update the TCP disk cache from memory cache on every USB pass
@@ -415,7 +417,7 @@ def loop():
 						
 		if tcp_scan >= tcp_scan_limit and automatic_tcp:
 			tcp_scan = 0
-			for dvc in ini.read("device_names").split(","):
+			for dvc in (dn if len(dn := ini.read("device_names"))>0 else "").split(","):
 				cmd.connect.call(dvc=dvc)
 				#TODO: Rewrite to not block the main thread
 				#TODO: Exclude currently connected tcp devices
