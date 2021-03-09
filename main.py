@@ -136,7 +136,7 @@ class Ini:
 	# </editor-fold>
 	
 	#.ini checks included
-	def create_file(self, name = None, mode = "r+", safe = True):
+	def create_file(self, name = None, mode = "r+", safe = True, *, expose = False):
 		if name is None:
 			name = str(uuid.uuid1()).replace("-", "") + ".ini"
 			self.temp_files.append(os.path.join(self.main_path, name))
@@ -147,10 +147,15 @@ class Ini:
 		if safe:
 			if not(os.path.exists(_path) and os.path.isfile(_path)):
 				open(_path, "w+").close()
-			return open(_path, mode)
+			if expose:
+				return open(_path, mode)
+			else: return
 		else:
 			open(_path, "w+").close()
-			return open(_path, mode)
+			if expose:
+				return open(_path, mode)
+			else:
+				return
 		
 	def read(self, key):
 		with open(self.main_config, "r") as f:
@@ -177,7 +182,7 @@ class Ini:
 		#Value == None behavior is undefined in safe mode, nothing is changed
 		#Safe == False is normal override behavior
 		with open(self.main_config, "r+") as f:
-			with self.create_file() as temp:
+			with self.create_file(expose = True) as temp:
 				append = True
 				for line in f:
 					line = self._unify(line)
@@ -204,7 +209,7 @@ class Ini:
 		
 	def write_flag(self, flag: str, value: bool):
 		with open(self.main_config, "r+") as f:
-			with self.create_file() as temp:
+			with self.create_file(expose = True) as temp:
 				append = value
 				for line in f:
 					if line.startswith("#"):
@@ -236,6 +241,7 @@ class Ini:
 		self.config_name = config_name
 		self.main_path = self._resolve(config_path)
 		self.main_config = os.path.join(self.main_path, self.config_name)
+		self.create_file(self.main_config)
 # </editor-fold>
 
 # <editor-fold desc="ADB Skeleton">
@@ -378,11 +384,15 @@ def default_config():
 
 cmd.start_server.call()
 
+proceed = True
+shutdown = False
+
 def setup(_icon):
 	_icon.visible = True
 	loop()
 	_icon.stop()
 
+#Passive loop with operational freeze support
 def loop():
 	usb_scan = 0
 	usb_scan_limit = 0
@@ -394,7 +404,20 @@ def loop():
 	
 	devices = set()
 	
-	while True:
+	tcp_scan_buffer = [] #Device process buffer because fuck complicated threads
+	tcp_scan_buffer_fill = True
+	
+	while not shutdown:
+		usb_scan, usb_scan_limit, tcp_cache, automatic_tcp, tcp_scan, tcp_scan_limit, config_pass, devices, tcp_scan_buffer, tcp_scan_buffer_fill =\
+			proceed_loop(usb_scan, usb_scan_limit, tcp_cache, automatic_tcp, tcp_scan, tcp_scan_limit, config_pass, devices, tcp_scan_buffer, tcp_scan_buffer_fill)
+		time.sleep(1)
+		
+#Operational loop
+def proceed_loop(usb_s, usb_sl, tcp_c, a_tcp, tcp_s, tcp_sl, cp, dvc_set, tcp_buf, tcp_bf):
+	usb_scan, usb_scan_limit, tcp_cache, automatic_tcp, tcp_scan, tcp_scan_limit, config_pass, devices, tcp_scan_buffer, tcp_scan_buffer_fill\
+		= usb_s, usb_sl, tcp_c, a_tcp, tcp_s, tcp_sl, cp, dvc_set, tcp_buf, tcp_bf
+	
+	while proceed:
 		if config_pass >= c.config_sleep:
 			config_pass = 0
 			if ini.read_flag("stop"):
@@ -403,34 +426,45 @@ def loop():
 			tcp_scan_limit = ini.read(tcp_cache_scan_period)
 			tcp_cache = (ini.read(tcp_caching) == "True")
 			automatic_tcp = (ini.read(auto_tcp) == "True")
-			
+		
 		if usb_scan >= usb_scan_limit:
 			usb_scan = 0
 			active_physical_devices = cmd.get_devices(ignore_tcp = True, ignore_emulators = True)
 			devices = devices.union(active_physical_devices)
-			devices = devices.union((dn if len(dn := ini.read("device_names"))>0 else "").split(","))
+			devices = devices.union((dn if len(dn := ini.read("device_names")) > 0 else "").split(","))
 			ini.write("device_names", ",".join(devices))
 			for device in active_physical_devices:
-				if tcp_cache: #Update the TCP disk cache from memory cache on every USB pass
+				if tcp_cache:  # Update the TCP disk cache from memory cache on every USB pass
 					if ini.read(device + "_tcp_cache") != (ipa := _command_disconnect_helper(device)):
 						ini.write(device + "_tcp_cache", ipa)
-						
+		
 		if tcp_scan >= tcp_scan_limit and automatic_tcp:
-			tcp_scan = 0
-			for dvc in (dn if len(dn := ini.read("device_names"))>0 else "").split(","):
-				cmd.connect.call(dvc=dvc)
-				#TODO: Rewrite to not block the main thread
-				#TODO: Exclude currently connected tcp devices
-				#1 sec delay between consecutive calls would be nice also
-	
+			if tcp_scan_buffer_fill:
+				temp_buffer = (dn if len(dn := ini.read("device_names")) > 0 else "").split(",")
+				tcp_scan_buffer = [x if (len(x) > 0 and not x.startswith("emulator") and not ":" in x) else x for x in temp_buffer]  # Filter non-usb devices
+				tcp_scan_buffer_fill = False
+			
+			if l := len(tcp_scan_buffer) > 0:
+				d = tcp_scan_buffer.pop()
+				cmd.connect.call(dvc = d)
+				if l == 1:
+					tcp_scan = 0
+					tcp_scan_buffer_fill = True
+		
 		usb_scan += 1
 		tcp_scan += 1
 		config_pass += 1
 		time.sleep(c.sleep)
+		
+	#Return final values for operation freeze
+	return usb_scan, usb_scan_limit, tcp_cache, automatic_tcp, tcp_scan, tcp_scan_limit, config_pass, devices, tcp_scan_buffer, tcp_scan_buffer_fill
+	
 # </editor-fold>
 
+#TODO: IMPORTANT, Find a way to update the configuration file with the current state
+
 if tray:
-	icon = pystray.Icon("ADB Tools")
+	icon = pystray.Icon(name="ADB Tools", title="ADB Tools")
 	rgba_image = Image.open(png_path)
 	rgba_image.load()
 	icon.icon = rgba_image
