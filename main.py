@@ -65,9 +65,9 @@ if not os.path.exists(ico_path):
 	with open(ico_path, "wb") as p:
 		p.write(base64.decodebytes(ico_256.encode()))
 
-def toast(notification, title="ADB Tools", icon_path = png_path, duration=3):
+def toast(notification, title="ADB Tools", icon_path = ico_path, duration=3):
 	try:
-		tst.show_toast(title, notification, icon_path, duration)
+		tst.show_toast(title, notification, icon_path, duration, threaded = True)
 	except:
 		pass
 
@@ -114,7 +114,7 @@ class Ini:
 	def _unify(string):
 		string = string.replace("\n", "")
 		if string.startswith("#"):
-			return "#" + string[1:].lstrip().rstrip()
+			return "#" + string.lstrip("#").lstrip().rstrip()
 		elif "=" in string:
 			return "=".join([a.lstrip().rstrip() for a in string.split("=")])
 	
@@ -144,20 +144,14 @@ class Ini:
 			name += ".ini"
 		
 		_path = os.path.join(self.main_path, name)
-		if safe:
-			if not(os.path.exists(_path) and os.path.isfile(_path)):
-				open(_path, "w+").close()
-			if expose:
-				return open(_path, mode)
-			else: return
-		else:
+		if not (safe and (os.path.exists(_path) and os.path.isfile(_path))):
 			open(_path, "w+").close()
-			if expose:
-				return open(_path, mode)
-			else:
-				return
+		if expose:
+			return open(_path, mode)
+		else:
+			return
 		
-	def read(self, key):
+	def read(self, key, *, requireNonNull = False):
 		with open(self.main_config, "r") as f:
 			for line in f:
 				if line.startswith("#"):
@@ -166,11 +160,12 @@ class Ini:
 				if key in line:
 					if line.split("=")[0] == key:
 						return line.split("=")[1]
-			return None
+					
+			return None if not requireNonNull else ""
 		
 	def read_flag(self, flag: str):
-		if flag.startswith("#"):
-			flag = flag.lstrip("#")
+		if not flag.startswith("#"):
+			flag = "#" + flag
 		with open(self.main_config, "r") as f:
 			for line in f:
 				if self._unify(line) == flag:
@@ -208,6 +203,8 @@ class Ini:
 		self._delete_temp_files()
 		
 	def write_flag(self, flag: str, value: bool):
+		if not flag.startswith("#"):
+			flag = "#" + flag
 		with open(self.main_config, "r+") as f:
 			with self.create_file(expose = True) as temp:
 				append = value
@@ -223,7 +220,7 @@ class Ini:
 						else:
 							temp.write(line + "\n")
 				if append:
-					temp.write("#" + flag.lstrip("#") + "\n")
+					temp.write(flag + "\n")
 				
 				f.flush()
 				temp.flush()
@@ -387,7 +384,7 @@ cmd.start_server.call()
 proceed = True
 shutdown = False
 
-def setup(_icon):
+def setup(_icon: pystray.Icon):
 	_icon.visible = True
 	loop()
 	_icon.stop()
@@ -424,14 +421,14 @@ def proceed_loop(usb_s, usb_sl, tcp_c, a_tcp, tcp_s, tcp_sl, cp, dvc_set, tcp_bu
 				break
 			usb_scan_limit = ini.read(usb_scan_period)
 			tcp_scan_limit = ini.read(tcp_cache_scan_period)
-			tcp_cache = (ini.read(tcp_caching) == "True")
-			automatic_tcp = (ini.read(auto_tcp) == "True")
+			tcp_cache = ini.read_flag(tcp_caching)
+			automatic_tcp = ini.read_flag(auto_tcp)
 		
 		if usb_scan >= usb_scan_limit:
 			usb_scan = 0
 			active_physical_devices = cmd.get_devices(ignore_tcp = True, ignore_emulators = True)
 			devices = devices.union(active_physical_devices)
-			devices = devices.union((dn if len(dn := ini.read("device_names")) > 0 else "").split(","))
+			devices = devices.union((dn if len(dn := ini.read("device_names", requireNonNull = True)) > 0 else "").split(","))
 			ini.write("device_names", ",".join(devices))
 			for device in active_physical_devices:
 				if tcp_cache:  # Update the TCP disk cache from memory cache on every USB pass
@@ -461,13 +458,43 @@ def proceed_loop(usb_s, usb_sl, tcp_c, a_tcp, tcp_s, tcp_sl, cp, dvc_set, tcp_bu
 	
 # </editor-fold>
 
-#TODO: IMPORTANT, Find a way to update the configuration file with the current state
+ps_menu_buffer = []
+
+# <editor-fold desc="Pystray Declarations">
+def ps_enabled_click(icon, item: pystray.MenuItem):
+	global proceed
+	proceed = not item.checked
+
+ps_menu_buffer.append(pystray.MenuItem("Enabled", ps_enabled_click, lambda item: proceed))
+
+ps_auto_tcp_flag = ini.read_flag(auto_tcp)
+
+def ps_auto_tcp(icon, item: pystray.MenuItem):
+	global ps_auto_tcp_flag
+	ps_auto_tcp_flag = not item.checked
+	ini.write_flag(auto_tcp, ps_auto_tcp_flag)
+	
+ps_menu_buffer.append(pystray.MenuItem("Auto TCP", ps_auto_tcp, lambda item: ps_auto_tcp_flag))
+
+
+
+def pass_function(*args):
+	pass
+
+_tcp_filters = []
+
+#TODO: URGENT, Fork Pystray and modify to not use global variables
+
+_p = pystray.MenuItem("Auto TCP Filters", pass_function)
+_p.submenu = pystray.Menu()
+# </editor-fold>
 
 if tray:
-	icon = pystray.Icon(name="ADB Tools", title="ADB Tools")
+	i = pystray.Icon(name="ADB Tools", title="ADB Tools")
 	rgba_image = Image.open(png_path)
 	rgba_image.load()
-	icon.icon = rgba_image
-	icon.run(setup)
+	i.icon = rgba_image
+	i.menu = pystray.Menu(*ps_menu_buffer)
+	i.run(setup)
 else:
 	loop()
