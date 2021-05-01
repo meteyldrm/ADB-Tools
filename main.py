@@ -17,6 +17,7 @@ except ImportError:
 	toast = False
 	
 try:
+	sys.path.insert(0, "C:\\Users\\outof\\PycharmProjects\\pystray\\lib")
 	# noinspection PyUnresolvedReferences
 	import pystray
 	# noinspection PyUnresolvedReferences
@@ -25,6 +26,7 @@ try:
 	import base64
 	tray = True
 except ImportError:
+	print("importerror")
 	tray = False
 # </editor-fold>
 
@@ -37,7 +39,7 @@ except:
 def resolve(_path):
 	if sys.platform == "win32":
 		if len(_path) > 255:
-			if not path.startswith("\\\\?\\"):
+			if not _path.startswith("\\\\?\\"):
 				_path = "\\\\?\\" + _path
 		return _path
 	else:
@@ -391,6 +393,8 @@ def setup(_icon: pystray.Icon):
 
 #Passive loop with operational freeze support
 def loop():
+	default_config()
+
 	usb_scan = 0
 	usb_scan_limit = 0
 	tcp_cache = True
@@ -467,26 +471,19 @@ def ps_enabled_click(icon, item: pystray.MenuItem):
 
 ps_menu_buffer.append(pystray.MenuItem("Enabled", ps_enabled_click, lambda item: proceed))
 
-ps_auto_tcp_flag = ini.read_flag(auto_tcp)
-
 def ps_auto_tcp(icon, item: pystray.MenuItem):
-	global ps_auto_tcp_flag
-	ps_auto_tcp_flag = not item.checked
-	ini.write_flag(auto_tcp, ps_auto_tcp_flag)
+	item.toggle()
+	ini.write_flag(auto_tcp, item.checked)
 	
-ps_menu_buffer.append(pystray.MenuItem("Auto TCP", ps_auto_tcp, lambda item: ps_auto_tcp_flag))
-
-
+ps_menu_buffer.append(pystray.MenuItem("Auto TCP", ps_auto_tcp, ini.read_flag(auto_tcp)))
 
 def pass_function(*args):
 	pass
 
 _tcp_filters = []
 
-#TODO: URGENT, Fork Pystray and modify to not use global variables
-
 _p = pystray.MenuItem("Auto TCP Filters", pass_function)
-_p.submenu = pystray.Menu()
+
 # </editor-fold>
 
 if tray:
