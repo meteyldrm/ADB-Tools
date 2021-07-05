@@ -17,7 +17,6 @@ except ImportError:
 	toast = False
 	
 try:
-	sys.path.insert(0, "C:\\Users\\outof\\PycharmProjects\\pystray\\lib")
 	# noinspection PyUnresolvedReferences
 	import pystray
 	# noinspection PyUnresolvedReferences
@@ -471,20 +470,28 @@ def ps_enabled_click(icon, item: pystray.MenuItem):
 
 ps_menu_buffer.append(pystray.MenuItem("Enabled", ps_enabled_click, lambda item: proceed))
 
+ps_auto_tcp_flag = ini.read_flag(auto_tcp)
+
 def ps_auto_tcp(icon, item: pystray.MenuItem):
-	item.toggle()
-	ini.write_flag(auto_tcp, item.checked)
-	
-ps_menu_buffer.append(pystray.MenuItem("Auto TCP", ps_auto_tcp, ini.read_flag(auto_tcp)))
+	global ps_auto_tcp_flag
+	ps_auto_tcp_flag = not item.checked
+	ini.write_flag(auto_tcp, ps_auto_tcp_flag)
+
+ps_menu_buffer.append(pystray.MenuItem("Auto TCP", ps_auto_tcp, lambda item: ps_auto_tcp_flag))
+
 
 def pass_function(*args):
 	pass
 
 _tcp_filters = []
 
-_p = pystray.MenuItem("Auto TCP Filters", pass_function)
-
+__p_menu_buffer = [pystray.MenuItem("Filter 1", pass_function), pystray.MenuItem("Filter 2", pass_function)]
+_p = pystray.MenuItem("Auto TCP Filters", pystray.Menu(*__p_menu_buffer))
+ps_menu_buffer.append(_p)
 # </editor-fold>
+
+#TODO: Enable Pystray functionality
+tray = False
 
 if tray:
 	i = pystray.Icon(name="ADB Tools", title="ADB Tools")
