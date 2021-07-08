@@ -398,6 +398,7 @@ def loop():
 	usb_scan_limit = 0
 	tcp_cache = True
 	automatic_tcp = True
+	automatic_mtp = True
 	tcp_scan = 0
 	tcp_scan_limit = 0
 	config_pass = 0
@@ -408,14 +409,14 @@ def loop():
 	tcp_scan_buffer_fill = True
 	
 	while not shutdown:
-		usb_scan, usb_scan_limit, tcp_cache, automatic_tcp, tcp_scan, tcp_scan_limit, config_pass, devices, tcp_scan_buffer, tcp_scan_buffer_fill =\
-			proceed_loop(usb_scan, usb_scan_limit, tcp_cache, automatic_tcp, tcp_scan, tcp_scan_limit, config_pass, devices, tcp_scan_buffer, tcp_scan_buffer_fill)
+		usb_scan, usb_scan_limit, tcp_cache, automatic_tcp, automatic_mtp, tcp_scan, tcp_scan_limit, config_pass, devices, tcp_scan_buffer, tcp_scan_buffer_fill =\
+			proceed_loop(usb_scan, usb_scan_limit, tcp_cache, automatic_tcp, automatic_mtp, tcp_scan, tcp_scan_limit, config_pass, devices, tcp_scan_buffer, tcp_scan_buffer_fill)
 		time.sleep(1)
 		
 #Operational loop
-def proceed_loop(usb_s, usb_sl, tcp_c, a_tcp, tcp_s, tcp_sl, cp, dvc_set, tcp_buf, tcp_bf):
-	usb_scan, usb_scan_limit, tcp_cache, automatic_tcp, tcp_scan, tcp_scan_limit, config_pass, devices, tcp_scan_buffer, tcp_scan_buffer_fill\
-		= usb_s, usb_sl, tcp_c, a_tcp, tcp_s, tcp_sl, cp, dvc_set, tcp_buf, tcp_bf
+def proceed_loop(usb_s, usb_sl, tcp_c, a_tcp, a_mtp, tcp_s, tcp_sl, cp, dvc_set, tcp_buf, tcp_bf):
+	usb_scan, usb_scan_limit, tcp_cache, automatic_tcp, automatic_mtp, tcp_scan, tcp_scan_limit, config_pass, devices, tcp_scan_buffer, tcp_scan_buffer_fill\
+		= usb_s, usb_sl, tcp_c, a_tcp, a_mtp, tcp_s, tcp_sl, cp, dvc_set, tcp_buf, tcp_bf
 	
 	while proceed:
 		if config_pass >= c.config_sleep:
@@ -426,6 +427,7 @@ def proceed_loop(usb_s, usb_sl, tcp_c, a_tcp, tcp_s, tcp_sl, cp, dvc_set, tcp_bu
 			tcp_scan_limit = ini.read(tcp_cache_scan_period)
 			tcp_cache = ini.read_flag(tcp_caching)
 			automatic_tcp = ini.read_flag(auto_tcp)
+			automatic_mtp = ini.read_flag(auto_mtp)
 		
 		if usb_scan >= usb_scan_limit:
 			usb_scan = 0
@@ -437,10 +439,16 @@ def proceed_loop(usb_s, usb_sl, tcp_c, a_tcp, tcp_s, tcp_sl, cp, dvc_set, tcp_bu
 				if tcp_cache:  # Update the TCP disk cache from memory cache on every USB pass
 					if ini.read(device + "_tcp_cache") != (ipa := _command_disconnect_helper(device)):
 						ini.write(device + "_tcp_cache", ipa)
+			
+			if automatic_mtp:
+				#TODO: Add multiple device support
+				#TODO: Add MTP device state buffer
+				if len(active_physical_devices) == 1:
+					cmd.mtp.call(dvc = active_physical_devices[0])
 		
 		if tcp_scan >= tcp_scan_limit and automatic_tcp:
 			if tcp_scan_buffer_fill:
-				temp_buffer = (dn if len(dn := ini.read("device_names")) > 0 else "").split(",")
+				temp_buffer = (dn if len(dn := ini.read("device_names", requireNonNull = True)) > 0 else "").split(",")
 				tcp_scan_buffer = [x if (len(x) > 0 and not x.startswith("emulator") and not ":" in x) else x for x in temp_buffer]  # Filter non-usb devices
 				tcp_scan_buffer_fill = False
 			
@@ -450,20 +458,20 @@ def proceed_loop(usb_s, usb_sl, tcp_c, a_tcp, tcp_s, tcp_sl, cp, dvc_set, tcp_bu
 				if l == 1:
 					tcp_scan = 0
 					tcp_scan_buffer_fill = True
-		
+					
 		usb_scan += 1
 		tcp_scan += 1
 		config_pass += 1
 		time.sleep(c.sleep)
 		
 	#Return final values for operation freeze
-	return usb_scan, usb_scan_limit, tcp_cache, automatic_tcp, tcp_scan, tcp_scan_limit, config_pass, devices, tcp_scan_buffer, tcp_scan_buffer_fill
+	return usb_scan, usb_scan_limit, tcp_cache, automatic_tcp, automatic_mtp, tcp_scan, tcp_scan_limit, config_pass, devices, tcp_scan_buffer, tcp_scan_buffer_fill
 	
 # </editor-fold>
 
+# <editor-fold desc="Pystray Declarations">
 ps_menu_buffer = []
 
-# <editor-fold desc="Pystray Declarations">
 def ps_enabled_click(icon, item: pystray.MenuItem):
 	global proceed
 	proceed = not item.checked
