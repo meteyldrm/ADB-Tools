@@ -44,7 +44,8 @@ def resolve(_path):
 	else:
 		return _path
 
-global path
+path = resolve(sys.path[0])
+
 #System argument processing
 for arg in sys.argv:
 	if "=" in arg:
@@ -195,7 +196,15 @@ class Cfg:
 		#Value == None behavior is undefined in safe mode, nothing is changed
 		#Safe == False is normal override behavior
 		with open(self.main_config, "r+") as f:
+			f.seek(0)
+			if safe: #Ensure safe mode safety
+				for line in f:
+					if key == self._unify(line).split("=")[0]:
+						return
+
+				f.seek(0)
 			with self.create_file(expose = True) as temp:
+				temp.seek(0)
 				append = True
 				for line in f:
 					line = self._unify(line)
@@ -211,13 +220,16 @@ class Cfg:
 					if value is not None:
 						temp.write(key + "=" + value + "\n")
 				f.flush()
+				os.fsync(f)
 				temp.flush()
+				os.fsync(temp)
 				f.truncate(0)
 				f.seek(0)
 				temp.seek(0)
 				for line in temp:
 					f.write(line)
 				f.flush()
+				os.fsync(f)
 		self._delete_temp_files()
 		
 	def write_flag(self, flag: str, value: bool):
@@ -260,9 +272,10 @@ class Cfg:
 # </editor-fold>
 
 # <editor-fold desc="ADB Skeleton">
+#TODO: Add external file modification detection
 class config:
 	sleep = 1
-	config_sleep = 300
+	config_sleep = 15
 	tcp_port = "50155"
 	tcp_port_range=(50001,63000)
 	random_port = False
@@ -413,8 +426,8 @@ def loop():
 
 	usb_scan = 0
 	usb_scan_limit = 0
-	automatic_tcp = True
-	automatic_mtp = True
+	automatic_tcp = False
+	automatic_mtp = False
 	tcp_scan = 0
 	tcp_scan_limit = 0
 	config_pass = 0
@@ -449,10 +462,9 @@ def proceed_loop(usb_s, usb_sl, a_tcp, a_mtp, tcp_s, tcp_sl, cp, dvc_set, tcp_bu
 			else:
 				cfg.write("mtp_cache", None)
 		
-		if usb_scan >= usb_scan_limit:
+		if int(usb_scan) >= int(usb_scan_limit):
 			usb_scan = 0
 			active_physical_devices = cmd.get_devices(ignore_tcp = True, ignore_emulators = True)
-			devices = set()
 			devices = devices.union(active_physical_devices)
 			devices = devices.union((dn if len(dn := cfg.read("device_names", requireNonNull = True)) > 0 else "").split(",")) #This can introduce an empty string in the set
 			devices.discard("")
@@ -474,7 +486,7 @@ def proceed_loop(usb_s, usb_sl, a_tcp, a_mtp, tcp_s, tcp_sl, cp, dvc_set, tcp_bu
 							mtpset.add(dvc)
 					cfg.write("mtp_cache", ",".join(*mtpset))
 		
-		if tcp_scan >= tcp_scan_limit and automatic_tcp:
+		if int(tcp_scan) >= int(tcp_scan_limit) and automatic_tcp:
 			if tcp_scan_buffer_fill:
 				temp_buffer = (dn if len(dn := cfg.read("device_names", requireNonNull = True)) > 0 else "").split(",")
 				tcp_scan_buffer = [x if (len(x) > 0 and not x.startswith("emulator") and not ":" in x) else x for x in temp_buffer]  # Filter non-usb devices
