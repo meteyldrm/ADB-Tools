@@ -236,7 +236,10 @@ class Cfg:
 		if not flag.startswith("#"):
 			flag = "#" + flag
 		with open(self.main_config, "r+") as f:
+			f.seek(0)
 			with self.create_file(expose = True) as temp:
+				f.seek(0)
+				temp.seek(0)
 				append = value
 				for line in f:
 					if line.startswith("#"):
@@ -253,13 +256,16 @@ class Cfg:
 					temp.write(flag + "\n")
 				
 				f.flush()
+				os.fsync(f)
 				temp.flush()
+				os.fsync(temp)
 				f.truncate(0)
 				f.seek(0)
 				temp.seek(0)
 				for line in temp:
 					f.write(line)
 				f.flush()
+				os.fsync(f)
 		self._delete_temp_files()
 	
 	def __init__(self, config_name = "ADB_Tools", config_path = os.getcwd()):
@@ -405,8 +411,8 @@ auto_mtp="auto_mtp"
 def default_config():
 	cfg.write(usb_scan_period, "5", safe=True)
 	cfg.write(tcp_cache_scan_period, "60", safe=True)
-	cfg.write(auto_tcp, "true", safe=True)
-	cfg.write(auto_mtp, "true", safe=True)
+	cfg.write_flag(auto_tcp, False)
+	cfg.write_flag(auto_mtp, False)
 	
 # </editor-fold>
 
@@ -424,11 +430,11 @@ def setup(_icon: pystray.Icon):
 def loop():
 	default_config()
 
-	usb_scan = 0
+	usb_scan = 5
 	usb_scan_limit = 0
-	automatic_tcp = False
-	automatic_mtp = False
-	tcp_scan = 0
+	automatic_tcp = cfg.read_flag(auto_tcp)
+	automatic_mtp = cfg.read_flag(auto_mtp)
+	tcp_scan = 50
 	tcp_scan_limit = 0
 	config_pass = 0
 	
@@ -472,8 +478,9 @@ def proceed_loop(usb_s, usb_sl, a_tcp, a_mtp, tcp_s, tcp_sl, cp, dvc_set, tcp_bu
 				cfg.write("device_names", ",".join(devices))
 			for device in active_physical_devices:
 				# Update the TCP disk cache from memory cache on every USB pass
-				if cfg.read(device + "_tcp_cache") != (ipa := _command_disconnect_helper(device)):
-					cfg.write(device + "_tcp_cache", ipa)
+				if automatic_tcp:
+					if cfg.read(device + "_tcp_cache") != (ipa := _command_disconnect_helper(device)):
+						cfg.write(device + "_tcp_cache", ipa)
 			
 			if automatic_mtp:
 				if len(active_physical_devices) > 0:
