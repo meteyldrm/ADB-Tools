@@ -64,32 +64,35 @@ class ShadowFile(Utilities):
 					data[n] = str(data[n]).rstrip("\n").rstrip("\n")
 				data = "\n".join(data)
 			self._string_data = str(data).rstrip("\n").rstrip("\n")
-		
-		d = self._string_data.split("\n")
-		while True: #Remove duplicate newlines
+		if len(self._string_data) > 0:
 			try:
-				d.remove("")
+				d = self._string_data.split("\n")
 			except ValueError:
-				break
-		for i in range(len(d)):
-			q = d[i]
-			if q.startswith("#"):
-				if "=" in q:
-					self._data[q.split("=")[0]] = True
+				d = self._string_data
+			while True: #Remove duplicate newlines
+				try:
+					d.remove("")
+				except ValueError:
+					break
+			for i in range(len(d)):
+				q = d[i]
+				if q.startswith("#"):
+					if "=" in q:
+						self._data[q.split("=")[0]] = True
+					else:
+						self._data[q] = True
 				else:
-					self._data[q] = True
-			else:
-				if "=" in q:
-					self._data[q.split("=")[0]] = str(q.split("=")[1])
-				else:
-					pass
+					if "=" in q:
+						self._data[q.split("=")[0]] = str(q.split("=")[1])
+					else:
+						pass
 				
-	def _t_write(self, dt: str, *, _value = None, _flag = True): #Maybe implement multi-line processing
+	def _write(self, dt: str, _value = None): #Maybe implement multi-line processing
 		dt = super()._unify(dt)
 		
 		if dt.startswith("#"):
 			if "=" not in dt:
-				self._data[dt] = _flag
+				self._data[dt] = bool(_value)
 			else:
 				spl = dt.split("=")
 				if "true" == spl[1].lower():
@@ -106,26 +109,49 @@ class ShadowFile(Utilities):
 				else:
 					self._data[dt.split("=")[0]] = str(dt.split("=")[1])
 					
-	def _t_read(self, dt: str):
-		return self._data[super()._unify(dt)]
+	def _read(self, dt: str):
+		return self._data.get(super()._unify(dt), None)
 	
-	def _t_extract(self):
+	def _extract(self):
 		data = []
 		for key in list(self._data.keys()):
 			if str(key).startswith("#"):
-				if self._t_read(key):
+				if self._read(key):
 					data += key
 			else:
-				data += key + "=" + self._t_read(key)
+				data += key + "=" + self._read(key)
 		d = "\n".join(data)
 		if not d.endswith("\n"):
 			d += "\n"
 		return d
 	
 	def commit(self):
-		data = self._t_extract()
+		data = self._extract()
 		with open(super()._ensure_file(self._own_path), "r+") as f:
 			super()._clear_file(self._own_path)
 			f.seek(0)
 			f.write(data)
+	
+	def read(self, key, *, requireNonNull = False):
+		return self._read(key) if not requireNonNull else ""
+	
+	def read_flag(self, flag: str):
+		if not flag.startswith("#"):
+			flag = "#" + flag
+		v = self._read(flag)
+		return v if v is not None else False
+	
+	def write(self, key, value, safe = False):
+		if not (safe and self._read(key) is not None):
+			self._write(key, value)
+			
+	def write_flag(self, flag: str, value: bool):
+		if not flag.startswith("#"):
+			flag = "#" + flag
+		self._write(flag, value)
 		
+class Cfg(ShadowFile):
+	def __init__(self, config_name = "ADB_Tools", config_path = os.getcwd()):
+		if not config_name.endswith(".cfg"):
+			config_name += ".cfg"
+		super().__init__(os.path.join(config_path, config_name))
