@@ -45,43 +45,51 @@ class Utilities:
 		return _path
 
 class ShadowFile(Utilities):
+	_string_data = ""
 	_data = {}
 	_own_path = ""
 	
-	def __init__(self, data, own_path):
+	def __init__(self, own_path, data=None):
 		super().__init__()
 		self._own_path = own_path
-		if data is not None:
-			#TODO: Fix potential bug
-			"""Lists remove all consecutive newlines
-			whereas strings strip rightmost newlines only"""
-			if not isinstance(data, list):
-				data = str(data).lstrip("\n")
-				d = data.split("\n")
-			else:
-				while True:
-					try:
-						data.remove("\n")
-					except ValueError:
-						break
-				d = data
+		
+		#Ensure that data is read from the file if not provided
+		if data is None:
+			with open(super()._ensure_file(own_path), "r+") as f:
+				self._string_data = f.read()
+		else:
+			self._string_data = data
+			
+		#TODO: Fix potential bug
+		"""Lists remove all consecutive newlines
+		whereas strings strip rightmost newlines only"""
+		if not isinstance(self._string_data, list):
+			self._string_data = str(self._string_data).lstrip("\n")
+			d = self._string_data.split("\n")
+		else:
 			while True:
 				try:
-					d.remove("")
+					self._string_data.remove("\n")
 				except ValueError:
 					break
-			for i in range(len(d)):
-				q = d[i]
-				if q.startswith("#"):
-					if "=" in q:
-						self._data[q.split("=")[0]] = True
-					else:
-						self._data[q] = True
+			d = self._string_data
+		while True:
+			try:
+				d.remove("")
+			except ValueError:
+				break
+		for i in range(len(d)):
+			q = d[i]
+			if q.startswith("#"):
+				if "=" in q:
+					self._data[q.split("=")[0]] = True
 				else:
-					if "=" in q:
-						self._data[q.split("=")[0]] = str(q.split("=")[1])
-					else:
-						pass
+					self._data[q] = True
+			else:
+				if "=" in q:
+					self._data[q.split("=")[0]] = str(q.split("=")[1])
+				else:
+					pass
 				
 	def _t_write(self, dt: str, *, _value = None, _flag = True): #Maybe implement multi-line processing
 		dt = dt.rstrip("\n").lstrip("\n")
@@ -127,3 +135,4 @@ class ShadowFile(Utilities):
 			super()._clear_file(self._own_path)
 			f.seek(0)
 			f.write(data)
+		
