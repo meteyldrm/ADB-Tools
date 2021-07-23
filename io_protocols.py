@@ -119,9 +119,9 @@ class ShadowFile(Utilities):
 		for key in list(self._data.keys()):
 			if str(key).startswith("#"):
 				if self._read(key):
-					data += key
+					data.append(key)
 			else:
-				data += key + "=" + self._read(key)
+				data.append(key + "=" + self._read(key))
 		d = "\n".join(data)
 		if not d.endswith("\n"):
 			d += "\n"

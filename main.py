@@ -258,7 +258,7 @@ auto_mtp="auto_mtp"
 def default_config():
 	cfg.write(usb_scan_period, "5", safe=True)
 	cfg.write(tcp_cache_scan_period, "60", safe=True)
-	cfg.write_flag(auto_tcp, False)
+	cfg.write_flag(auto_tcp, True)
 	cfg.write_flag(auto_mtp, False)
 	
 # </editor-fold>
