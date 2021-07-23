@@ -48,16 +48,23 @@ class ShadowFile(Utilities):
 	_data = {}
 	_own_path = ""
 	
-	def __init__(self, data, own_path, is_list = False):
+	def __init__(self, data, own_path):
 		super().__init__()
 		self._own_path = own_path
 		if data is not None:
-			data = str(data).lstrip("\n")
-			if not is_list:
+			#TODO: Fix potential bug
+			"""Lists remove all consecutive newlines
+			whereas strings strip rightmost newlines only"""
+			if not isinstance(data, list):
+				data = str(data).lstrip("\n")
 				d = data.split("\n")
 			else:
+				while True:
+					try:
+						data.remove("\n")
+					except ValueError:
+						break
 				d = data
-			
 			while True:
 				try:
 					d.remove("")
