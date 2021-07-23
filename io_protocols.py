@@ -1,7 +1,5 @@
-import time
 import os
 import sys
-import uuid
 
 class Utilities:
 	@staticmethod
@@ -31,6 +29,11 @@ class Utilities:
 			open(_path, "w+").close()
 		return _path
 	
+	def _clear_file(self, _path):
+		if self._check_file(_path):
+			with open(_path, "r+") as f:
+				f.truncate(0)
+	
 	def _check_dir(self, _path):
 		_path = self._resolve(_path)
 		return os.path.exists(_path) and os.path.isdir(_path)
@@ -41,54 +44,79 @@ class Utilities:
 			os.mkdir(_path)
 		return _path
 
-class ShadowFile:
-	data = {}
+class ShadowFile(Utilities):
+	_data = {}
+	_own_path = ""
 	
-	def __init__(self, data: None):
+	def __init__(self, data, own_path, is_list = False):
+		super().__init__()
+		self._own_path = own_path
 		if data is not None:
 			data = str(data).lstrip("\n")
-			d = data.split("\n")
+			if not is_list:
+				d = data.split("\n")
+			else:
+				d = data
 			
-			try:
-				d.remove("")
-			except ValueError:
-				pass
+			while True:
+				try:
+					d.remove("")
+				except ValueError:
+					break
 			for i in range(len(d)):
 				q = d[i]
 				if q.startswith("#"):
 					if "=" in q:
-						self.data[q.split("=")[0]] = True
+						self._data[q.split("=")[0]] = True
 					else:
-						self.data[q] = True
+						self._data[q] = True
 				else:
 					if "=" in q:
-						self.data[q.split("=")[0]] = str(q.split("=")[1])
+						self._data[q.split("=")[0]] = str(q.split("=")[1])
 					else:
 						pass
 				
-	def _write(self, dt: str, *, _value = None, _flag = True): #Maybe implement multi-line processing
+	def _t_write(self, dt: str, *, _value = None, _flag = True): #Maybe implement multi-line processing
 		dt = dt.rstrip("\n").lstrip("\n")
 		
 		if dt.startswith("#"):
 			if "=" not in dt:
-				self.data[dt] = str(_flag)
+				self._data[dt] = _flag
 			else:
 				spl = dt.split("=")
 				if "true" == spl[1].lower():
-					self.data[spl[0]] = True
+					self._data[spl[0]] = True
 				elif "false" == spl[1].lower():
-					self.data[spl[0]] = False
+					self._data[spl[0]] = False
 				else:
 					pass
 		else:
 			if _value is not None:
 				_value = str(_value).rstrip().lstrip().rstrip("\n").lstrip("\n")
 				if "=" not in dt:
-					self.data[dt] = str(_value)
+					self._data[dt] = str(_value)
 				else:
-					self.data[dt.split("=")[0]] = str(dt.split("=")[1])
+					self._data[dt.split("=")[0]] = str(dt.split("=")[1])
+					
+	def _t_read(self, dt: str):
+		return self._data[dt]
 	
-class BufferManager(Utilities):
-	def __init__(self, init_path):
-		super().__init__()
-		self.path = self._ensure_dir(self._resolve(init_path))
+	def _t_extract(self):
+		data = []
+		for key in list(self._data.keys()):
+			if str(key).startswith("#"):
+				if self._t_read(key):
+					data += key
+			else:
+				data += key + "=" + self._t_read(key)
+		d = "\n".join(data)
+		if not d.endswith("\n"):
+			d += "\n"
+		return d
+	
+	def commit(self):
+		data = self._t_extract()
+		with open(super()._ensure_file(self._own_path), "r+") as f:
+			super()._clear_file(self._own_path)
+			f.seek(0)
+			f.write(data)
