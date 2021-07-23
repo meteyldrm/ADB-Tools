@@ -58,22 +58,15 @@ class ShadowFile(Utilities):
 			with open(super()._ensure_file(own_path), "r+") as f:
 				self._string_data = f.read()
 		else:
-			self._string_data = data
-			
-		#TODO: Fix potential bug
-		"""Lists remove all consecutive newlines
-		whereas strings strip rightmost newlines only"""
-		if not isinstance(self._string_data, list):
-			self._string_data = str(self._string_data).lstrip("\n")
-			d = self._string_data.split("\n")
-		else:
-			while True:
-				try:
-					self._string_data.remove("\n")
-				except ValueError:
-					break
-			d = self._string_data
-		while True:
+			if isinstance(data, list): #Ensure that data is actually a string
+				assert isinstance(data, list)
+				for n in range(len(data)):
+					data[n] = str(data[n]).rstrip("\n").rstrip("\n")
+				data = "\n".join(data)
+			self._string_data = str(data).rstrip("\n").rstrip("\n")
+		
+		d = self._string_data.split("\n")
+		while True: #Remove duplicate newlines
 			try:
 				d.remove("")
 			except ValueError:
@@ -92,7 +85,7 @@ class ShadowFile(Utilities):
 					pass
 				
 	def _t_write(self, dt: str, *, _value = None, _flag = True): #Maybe implement multi-line processing
-		dt = dt.rstrip("\n").lstrip("\n")
+		dt = super()._unify(dt)
 		
 		if dt.startswith("#"):
 			if "=" not in dt:
@@ -114,7 +107,7 @@ class ShadowFile(Utilities):
 					self._data[dt.split("=")[0]] = str(dt.split("=")[1])
 					
 	def _t_read(self, dt: str):
-		return self._data[dt]
+		return self._data[super()._unify(dt)]
 	
 	def _t_extract(self):
 		data = []
