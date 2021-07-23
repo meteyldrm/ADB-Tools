@@ -9,6 +9,8 @@ class Utilities:
 			return "#" + string.lstrip("#").lstrip().rstrip()
 		elif "=" in string:
 			return "=".join([a.lstrip().rstrip() for a in string.split("=")])
+		else:
+			return string
 	
 	@staticmethod
 	def _resolve(_path):
@@ -155,3 +157,5 @@ class Cfg(ShadowFile):
 		if not config_name.endswith(".cfg"):
 			config_name += ".cfg"
 		super().__init__(os.path.join(config_path, config_name))
+		
+	#TODO: Add disk update scheduling for reading and writing(one phase reads, another phase writes)

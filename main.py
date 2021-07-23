@@ -4,7 +4,7 @@ import random
 import time
 import os
 import sys
-import uuid
+from io_protocols import Cfg
 
 toast = False
 tray = False
@@ -122,159 +122,6 @@ def _command_local_ip_helper(dvc):
 				l = line.split(" ")
 				return (l[1]).split("/")[0]
 	
-# </editor-fold>
-
-# <editor-fold desc="Config Functionality">
-class Cfg:
-	temp_files = []
-	
-	# <editor-fold desc="Helper Functions">
-	@staticmethod
-	def _unify(string):
-		string = string.replace("\n", "")
-		if string.startswith("#"):
-			return "#" + string.lstrip("#").lstrip().rstrip()
-		elif "=" in string:
-			return "=".join([a.lstrip().rstrip() for a in string.split("=")])
-	
-	@staticmethod
-	def _resolve(_path):
-		if sys.platform == "win32":
-			if len(_path) > 255:
-				if not path.startswith("\\\\?\\"):
-					_path = "\\\\?\\" + _path
-			return _path
-		else:
-			return _path
-		
-	def _delete_temp_files(self):
-		for file in self.temp_files:
-			os.unlink(file)
-			self.temp_files.remove(file)
-			
-	# </editor-fold>
-	
-	#.cfg checks included
-	def create_file(self, name = None, mode = "r+", safe = True, *, expose = False):
-		if name is None:
-			name = str(uuid.uuid1()).replace("-", "") + ".cfg"
-			self.temp_files.append(os.path.join(self.main_path, name))
-		elif not name.endswith(".cfg"):
-			name += ".cfg"
-		
-		_path = os.path.join(self.main_path, name)
-		if not (safe and (os.path.exists(_path) and os.path.isfile(_path))):
-			open(_path, "w+").close()
-		if expose:
-			return open(_path, mode)
-		else:
-			return
-		
-	def read(self, key, *, requireNonNull = False):
-		with open(self.main_config, "r") as f:
-			for line in f:
-				if line.startswith("#"):
-					continue
-				line = self._unify(line)
-				if key in line:
-					if line.split("=")[0] == key:
-						return line.split("=")[1]
-					
-			return None if not requireNonNull else ""
-		
-	def read_flag(self, flag: str):
-		if not flag.startswith("#"):
-			flag = "#" + flag
-		with open(self.main_config, "r") as f:
-			for line in f:
-				if self._unify(line) == flag:
-					return True
-			return False
-		
-	def write(self, key, value, safe = False):
-		#Safe mode ensures the existence of the key, used to create the default config
-		#Value == None behavior is undefined in safe mode, nothing is changed
-		#Safe == False is normal override behavior
-		with open(self.main_config, "r+") as f:
-			f.seek(0)
-			if safe: #Ensure safe mode safety
-				for line in f:
-					if key == self._unify(line).split("=")[0]:
-						return
-
-				f.seek(0)
-			with self.create_file(expose = True) as temp:
-				temp.seek(0)
-				append = True
-				for line in f:
-					line = self._unify(line)
-					if line.split("=")[0] != key:
-						temp.write(line + "\n")
-					else:
-						append = False
-						if value is not None and not safe:
-							temp.write(key + "=" + value + "\n")
-						else:
-							continue
-				if append:
-					if value is not None:
-						temp.write(key + "=" + value + "\n")
-				f.flush()
-				os.fsync(f)
-				temp.flush()
-				os.fsync(temp)
-				f.truncate(0)
-				f.seek(0)
-				temp.seek(0)
-				for line in temp:
-					f.write(line)
-				f.flush()
-				os.fsync(f)
-		self._delete_temp_files()
-		
-	def write_flag(self, flag: str, value: bool):
-		if not flag.startswith("#"):
-			flag = "#" + flag
-		with open(self.main_config, "r+") as f:
-			f.seek(0)
-			with self.create_file(expose = True) as temp:
-				f.seek(0)
-				temp.seek(0)
-				append = value
-				for line in f:
-					if line.startswith("#"):
-						line = self._unify(line)
-						if flag == line:
-							if value:
-								temp.write(line + "\n")
-								append = False
-							else:
-								continue
-						else:
-							temp.write(line + "\n")
-				if append:
-					temp.write(flag + "\n")
-				
-				f.flush()
-				os.fsync(f)
-				temp.flush()
-				os.fsync(temp)
-				f.truncate(0)
-				f.seek(0)
-				temp.seek(0)
-				for line in temp:
-					f.write(line)
-				f.flush()
-				os.fsync(f)
-		self._delete_temp_files()
-	
-	def __init__(self, config_name = "ADB_Tools", config_path = os.getcwd()):
-		if not config_name.endswith(".cfg"):
-			config_name += ".cfg"
-		self.config_name = config_name
-		self.main_path = self._resolve(config_path)
-		self.main_config = os.path.join(self.main_path, self.config_name)
-		self.create_file(self.main_config)
 # </editor-fold>
 
 # <editor-fold desc="ADB Skeleton">
@@ -398,7 +245,7 @@ class commands:
 # </editor-fold>
 
 # <editor-fold desc="Post-Initializers">
-cfg = Cfg()
+cfg = Cfg(config_path = path)
 c = config()
 cmd = commands()
 
@@ -456,6 +303,8 @@ def proceed_loop(usb_s, usb_sl, a_tcp, a_mtp, tcp_s, tcp_sl, cp, dvc_set, tcp_bu
 	while proceed:
 		if config_pass >= c.config_sleep:
 			config_pass = 0
+			cfg.commit()
+			#TODO: This is broken until update scheduling is implemented
 			if cfg.read_flag("stop"):
 				break
 			usb_scan_limit = cfg.read(usb_scan_period)
