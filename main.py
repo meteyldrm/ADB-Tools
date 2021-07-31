@@ -301,12 +301,11 @@ def proceed_loop(usb_s, usb_sl, a_tcp, a_mtp, tcp_s, tcp_sl, cp, dvc_set, tcp_bu
 		= usb_s, usb_sl, a_tcp, a_mtp, tcp_s, tcp_sl, cp, dvc_set, tcp_buf, tcp_bf
 	
 	while proceed:
-		if config_pass >= c.config_sleep:
+		if config_pass == c.config_sleep // 2: #read loop
+			pass
+		if config_pass >= c.config_sleep: #write loop
 			config_pass = 0
 			cfg.commit()
-			#TODO: This is broken until update scheduling is implemented
-			if cfg.read_flag("stop"):
-				break
 			usb_scan_limit = cfg.read(usb_scan_period)
 			tcp_scan_limit = cfg.read(tcp_cache_scan_period)
 			automatic_tcp = cfg.read_flag(auto_tcp)

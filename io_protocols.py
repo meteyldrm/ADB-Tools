@@ -78,6 +78,7 @@ class ShadowFile(Utilities):
 					break
 			for i in range(len(d)):
 				q = d[i]
+				q = self._unify(q)
 				if q.startswith("#"):
 					if "=" in q:
 						self._data[q.split("=")[0]] = True
@@ -88,7 +89,7 @@ class ShadowFile(Utilities):
 						self._data[q.split("=")[0]] = str(q.split("=")[1])
 					else:
 						pass
-				
+	
 	def _write(self, dt: str, _value = None): #Maybe implement multi-line processing
 		dt = super()._unify(dt)
 		
@@ -157,5 +158,3 @@ class Cfg(ShadowFile):
 		if not config_name.endswith(".cfg"):
 			config_name += ".cfg"
 		super().__init__(os.path.join(config_path, config_name))
-		
-	#TODO: Add disk update scheduling for reading and writing(one phase reads, another phase writes)
