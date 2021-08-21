@@ -128,9 +128,10 @@ class ShadowFile(Utilities):
 			d += "\n"
 		return d
 	
-	def commit(self):
+	def commit(self): #TODO: Add file clash check before writing, this enables modification detection when comparing to internal data.
 		data = self._extract()
 		with open(super()._ensure_file(self._own_path), "r+") as f:
+			
 			super()._clear_file(self._own_path)
 			f.seek(0)
 			f.write(data)

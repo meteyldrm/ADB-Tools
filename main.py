@@ -98,16 +98,16 @@ def _command_connect_helper(dvc):
 		c.ip_addr(dvc, ip = _command_local_ip_helper(dvc))
 		cmd.tcp_ip.call(dvc = dvc)
 		if cfg.read(auto_tcp) == "True":
-			cfg.write(dvc + "_tcp_cache", c.ip_addr(dvc) + ":" + c.get_tcp_port(dvc))
+			cache.write(dvc + "_tcp_cache", c.ip_addr(dvc) + ":" + c.get_tcp_port(dvc))
 		return c.ip_addr(dvc) + ":" + c.get_tcp_port(dvc)
 
-	return cfg.read(dvc + "_tcp_cache")
+	return cache.read(dvc + "_tcp_cache")
 
 def _command_disconnect_helper(dvc):
 	return c.ip_addr(dvc) + ":" + c.get_tcp_port(dvc)
 
 def _command_usb_helper(dvc):
-	cfg.write(dvc + "_tcp_cache", None)
+	cache.write(dvc + "_tcp_cache", None)
 	return c.ip_addr(dvc) + ":" + c.get_tcp_port(dvc)
 
 def _command_local_ip_helper(dvc):
@@ -125,7 +125,6 @@ def _command_local_ip_helper(dvc):
 # </editor-fold>
 
 # <editor-fold desc="ADB Skeleton">
-#TODO: Add external file modification detection
 class config:
 	sleep = 1
 	config_sleep = 15
@@ -262,6 +261,7 @@ def default_config():
 	cfg.write(tcp_cache_scan_period, "60", safe=True)
 	cfg.write_flag(auto_tcp, True)
 	cfg.write_flag(auto_mtp, True)
+	cfg.commit()
 	
 # </editor-fold>
 
@@ -423,3 +423,19 @@ if tray:
 	i.run(setup)
 else:
 	loop()
+
+#TODO: Implement this while refactoring filters
+"""
+Notes: Build runtime buffer for new devices and hide them.
+Proposal: A submenu "Devices" will be displayed with all items hidden. The device cache will be read, devices will be renamed and menu updated.
+As new devices are connected, they will be placed into this menu. 10 items should be sufficient.
+
+The menu should read from the device cache and check the availability of each device. x marked devices are offline/disconnected.
+Example:
+  [USB] Riptide
+x [TCP] Riptide
+  [Emulator] something
+  
+Picking an option will change the active device that can be configured through the menu.
+Options should be updated accordingly.
+"""
