@@ -247,6 +247,7 @@ class commands:
 
 # <editor-fold desc="Post-Initializers">
 cfg = Cfg(config_path = path)
+cache = Cfg(config_name = "device", config_path = path, extension_override = ".cache")
 c = config()
 cmd = commands()
 
@@ -306,15 +307,16 @@ def proceed_loop(usb_s, usb_sl, a_tcp, a_mtp, tcp_s, tcp_sl, cp, dvc_set, tcp_bu
 		if config_pass >= c.config_sleep: #write loop
 			config_pass = 0
 			cfg.commit()
+			cache.commit()
 			usb_scan_limit = cfg.read(usb_scan_period)
 			tcp_scan_limit = cfg.read(tcp_cache_scan_period)
 			automatic_tcp = cfg.read_flag(auto_tcp)
 			#Assume TCP cache if auto TCP is enabled
 			automatic_mtp = cfg.read_flag(auto_mtp)
 			if automatic_mtp: #Enable MTP Cache if enabled, delete if disabled
-				cfg.write("mtp_cache", "") #Clear MTP cache at every launch
+				cache.write("mtp_cache", "") #Clear MTP cache at every launch
 			else:
-				cfg.write("mtp_cache", None)
+				cache.write("mtp_cache", None)
 		if not server_started: #TODO: Add a threaded server check, support kill-server detection
 			cmd.start_server.call(stdout = False)
 			server_started = True
@@ -323,24 +325,23 @@ def proceed_loop(usb_s, usb_sl, a_tcp, a_mtp, tcp_s, tcp_sl, cp, dvc_set, tcp_bu
 				usb_scan = 0
 				active_physical_devices = cmd.get_devices(ignore_tcp = True, ignore_emulators = True)
 				devices = devices.union(active_physical_devices)
-				devices = devices.union((dn if len(dn := cfg.read("device_names", requireNonNull = True)) > 0 else "").split(",")) #This can introduce an empty string in the set
+				devices = devices.union((dn if len(dn := cache.read("device_names", requireNonNull = True)) > 0 else "").split(",")) #This can introduce an empty string in the set
 				devices.discard("")
 				if len(devices) > 0:
-					cfg.write("device_names", ",".join(devices))
+					cache.write("device_names", ",".join(devices))
 				for device in active_physical_devices:
 					# Update the TCP disk cache from memory cache on every USB pass
 					if automatic_tcp:
 						cmd.connect.call(dvc=device)
-						if cfg.read(device + "_tcp_cache") != (ipa := _command_disconnect_helper(device)):
-							cfg.write(device + "_tcp_cache", ipa)
+						if cache.read(device + "_tcp_cache") != (ipa := _command_disconnect_helper(device)):
+							cache.write(device + "_tcp_cache", ipa)
 						
-				
 				if automatic_mtp:
 					if len(active_physical_devices) > 0:
 						mtpset = set()
 						for dvc in active_physical_devices:
 							try:
-								for n in cfg.read("mtp_cache").split(","):
+								for n in cache.read("mtp_cache").split(","):
 									mtpset.add(n)
 							except AttributeError:
 								pass
@@ -355,11 +356,11 @@ def proceed_loop(usb_s, usb_sl, a_tcp, a_mtp, tcp_s, tcp_sl, cp, dvc_set, tcp_bu
 								except subprocess.CalledProcessError:
 									#Physical device probably disconnected
 									pass
-						cfg.write("mtp_cache", ",".join(mtpset))
+						cache.write("mtp_cache", ",".join(mtpset))
 			
 			if int(tcp_scan) >= int(tcp_scan_limit) and automatic_tcp:
 				if tcp_scan_buffer_fill:
-					temp_buffer = (dn if len(dn := cfg.read("device_names", requireNonNull = True)) > 0 else "").split(",")
+					temp_buffer = (dn if len(dn := cache.read("device_names", requireNonNull = True)) > 0 else "").split(",")
 					tcp_scan_buffer = [x if (len(x) > 0 and not x.startswith("emulator") and not ":" in x) else x for x in temp_buffer]  # Filter non-usb devices
 					tcp_scan_buffer_fill = False
 				
