@@ -261,12 +261,12 @@ shutdown = False
 def loop():
 	default_config()
 
-	usb_scan = 5
-	usb_scan_limit = 0
+	usb_scan = 0
+	usb_scan_limit = cfg.read(usb_scan_period)
 	automatic_tcp = cfg.read_flag(auto_tcp)
 	automatic_mtp = cfg.read_flag(auto_mtp)
-	tcp_scan = 50
-	tcp_scan_limit = 0
+	tcp_scan = 0
+	tcp_scan_limit = cfg.read(tcp_cache_scan_period)
 	config_pass = 0
 	
 	devices = set()
