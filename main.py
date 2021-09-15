@@ -414,15 +414,16 @@ ps_menu_buffer.append(_p)
 #TODO: Enable Pystray functionality
 tray = False
 
-if tray:
-	i = pystray.Icon(name="ADB Tools", title="ADB Tools")
-	rgba_image = Image.open(png_path)
-	rgba_image.load()
-	i.icon = rgba_image
-	i.menu = pystray.Menu(*ps_menu_buffer)
-	i.run(setup)
-else:
-	loop()
+if __name__ == "__main__":
+	if tray:
+		i = pystray.Icon(name="ADB Tools", title="ADB Tools")
+		rgba_image = Image.open(png_path)
+		rgba_image.load()
+		i.icon = rgba_image
+		i.menu = pystray.Menu(*ps_menu_buffer)
+		i.run(setup)
+	else:
+		loop()
 
 #TODO: Implement this while refactoring filters
 """
