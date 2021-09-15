@@ -47,12 +47,10 @@ class Utilities:
 		return _path
 
 class ShadowFile(Utilities):
-	_string_data = ""
-	_data = {}
-	_own_path = ""
-	
 	def __init__(self, own_path, data=None):
 		super().__init__()
+		self._string_data = ""
+		self._data = {}
 		self._own_path = own_path
 		
 		#Ensure that data is read from the file if not provided
