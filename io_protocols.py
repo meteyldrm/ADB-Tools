@@ -1,6 +1,7 @@
 import os
 import sys
 
+
 class Utilities:
 	@staticmethod
 	def _unify(string):
@@ -21,7 +22,7 @@ class Utilities:
 			return _path
 		else:
 			return _path
-		
+	
 	def _check_file(self, _path):
 		_path = self._resolve(_path)
 		return os.path.exists(_path) and os.path.isfile(_path)
@@ -46,19 +47,20 @@ class Utilities:
 			os.mkdir(_path)
 		return _path
 
+
 class ShadowFile(Utilities):
-	def __init__(self, own_path, data=None):
+	def __init__(self, own_path, data = None):
 		super().__init__()
 		self._string_data = ""
 		self._data = {}
 		self._own_path = own_path
 		
-		#Ensure that data is read from the file if not provided
+		# Ensure that data is read from the file if not provided
 		if data is None:
 			with open(super()._ensure_file(own_path), "r+") as f:
 				self._string_data = f.read()
 		else:
-			if isinstance(data, list): #Ensure that data is actually a string
+			if isinstance(data, list):  # Ensure that data is actually a string
 				assert isinstance(data, list)
 				for n in range(len(data)):
 					data[n] = str(data[n]).rstrip("\n").rstrip("\n")
@@ -69,7 +71,7 @@ class ShadowFile(Utilities):
 				d = self._string_data.split("\n")
 			except ValueError:
 				d = self._string_data
-			while True: #Remove duplicate newlines
+			while True:  # Remove duplicate newlines
 				try:
 					d.remove("")
 				except ValueError:
@@ -88,7 +90,7 @@ class ShadowFile(Utilities):
 					else:
 						pass
 	
-	def _write(self, dt: str, _value = None): #Maybe implement multi-line processing
+	def _write(self, dt: str, _value = None):  # Maybe implement multi-line processing
 		dt = super()._unify(dt)
 		
 		if dt.startswith("#"):
@@ -109,7 +111,7 @@ class ShadowFile(Utilities):
 					self._data[dt] = str(_value)
 				else:
 					self._data[dt.split("=")[0]] = str(dt.split("=")[1])
-					
+	
 	def _read(self, dt: str):
 		return self._data.get(super()._unify(dt), None)
 	
@@ -126,16 +128,15 @@ class ShadowFile(Utilities):
 			d += "\n"
 		return d
 	
-	def commit(self): #TODO: Add file clash check before writing, this enables modification detection when comparing to internal data.
+	def commit(self):  # TODO: Add file clash check before writing, this enables modification detection when comparing to internal data.
 		data = self._extract()
 		with open(super()._ensure_file(self._own_path), "r+") as f:
-			
 			super()._clear_file(self._own_path)
 			f.seek(0)
 			f.write(data)
 	
-	def read(self, key, *, requireNonNull = False):
-		return self._read(key) if not requireNonNull else ""
+	def read(self, key, *, require_non_null = False):
+		return self._read(key) if not require_non_null else ""
 	
 	def read_flag(self, flag: str):
 		if not flag.startswith("#"):
@@ -146,12 +147,13 @@ class ShadowFile(Utilities):
 	def write(self, key, value, safe = False):
 		if not (safe and self._read(key) is not None):
 			self._write(key, value)
-			
+	
 	def write_flag(self, flag: str, value: bool):
 		if not flag.startswith("#"):
 			flag = "#" + flag
 		self._write(flag, value)
-		
+
+
 class Cfg(ShadowFile):
 	def __init__(self, config_name = "ADB_Tools", config_path = os.getcwd(), extension_override = None, strip_extensions = True):
 		if strip_extensions:

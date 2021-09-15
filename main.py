@@ -7,30 +7,30 @@ import sys
 from io_protocols import Cfg
 
 toast = False
-tray = False
 
 try:
 	# noinspection PyUnresolvedReferences
 	import win10toast
+	
 	toast = True
 except ImportError:
 	toast = False
-	
+
 try:
 	# noinspection PyUnresolvedReferences
 	from PIL import Image
 	# noinspection PyUnresolvedReferences
 	import base64
-	tray = True
 except ImportError:
-	print("importerror")
+	print("Import Error")
 # </editor-fold>
 
 # <editor-fold desc="Initializers">
 try:
 	tst = win10toast.ToastNotifier()
-except:
+except Exception:
 	pass
+
 
 def resolve(_path):
 	if sys.platform == "win32":
@@ -41,9 +41,10 @@ def resolve(_path):
 	else:
 		return _path
 
+
 path = resolve(sys.path[0])
 
-#System argument processing
+# System argument processing
 for arg in sys.argv:
 	if "=" in arg:
 		arg_key, arg_value = arg.split("=")
@@ -55,7 +56,7 @@ for arg in sys.argv:
 
 os.chdir(path)
 
-#Ensure folder creation
+# Ensure folder creation
 try:
 	os.mkdir(os.path.join(path, "images"))
 except FileExistsError:
@@ -71,14 +72,17 @@ if not os.path.exists(ico_path):
 	with open(ico_path, "wb") as p:
 		p.write(base64.decodebytes(ico_256.encode()))
 
-def toast(notification, title="ADB Tools", icon_path = ico_path, duration=3):
+
+def toast(notification, title = "ADB Tools", icon_path = ico_path, duration = 3):
 	try:
 		tst.show_toast(title, notification, icon_path, duration, threaded = True)
-	except:
+	except Exception:
 		pass
 
-def _assert_usb(dvc): #Is this a (currently) physically connected usb device
+
+def _assert_usb(dvc):  # Is this a (currently) physically connected usb device
 	return dvc in cmd.get_devices(True, True)
+
 
 def _command_connect_helper(dvc):
 	if _assert_usb(dvc):
@@ -87,36 +91,40 @@ def _command_connect_helper(dvc):
 		if cfg.read(auto_tcp) == "True":
 			cache.write(dvc + "_tcp_cache", c.ip_addr(dvc) + ":" + c.get_tcp_port(dvc))
 		return c.ip_addr(dvc) + ":" + c.get_tcp_port(dvc)
-
+	
 	return cache.read(dvc + "_tcp_cache")
+
 
 def _command_disconnect_helper(dvc):
 	return c.ip_addr(dvc) + ":" + c.get_tcp_port(dvc)
+
 
 def _command_usb_helper(dvc):
 	cache.write(dvc + "_tcp_cache", None)
 	return c.ip_addr(dvc) + ":" + c.get_tcp_port(dvc)
 
+
 def _command_local_ip_helper(dvc):
 	if dvc in c.connected_ip_addr.keys():
 		return c.ip_addr(dvc)
 	else:
-		result = cmd.local_ip.call(dvc=dvc)
+		result = cmd.local_ip.call(dvc = dvc)
 		result = result.strip()
 		for line in result.split("\n"):
 			line = line.strip()
 			if line.startswith("inet "):
-				l = line.split(" ")
-				return (l[1]).split("/")[0]
-	
+				line_split = line.split(" ")
+				return (line_split[1]).split("/")[0]
+
+
 # </editor-fold>
 
 # <editor-fold desc="ADB Skeleton">
-class config:
+class ADBConfig:
 	sleep = 1
 	config_sleep = 15
 	tcp_port = "50155"
-	tcp_port_range=(50001,63000)
+	tcp_port_range = (50001, 63000)
 	random_port = False
 	
 	connected_ip_addr = {}
@@ -135,8 +143,8 @@ class config:
 				self.tcp_port = str(random.randint(*self.tcp_port_range, 2))
 			self.used_tcp_ports[dvc] = self.tcp_port
 			return self.tcp_port
-		
-	def ip_addr(self, dvc, ip=None):
+	
+	def ip_addr(self, dvc, ip = None):
 		if dvc in self.connected_ip_addr.keys():
 			return self.connected_ip_addr[dvc]
 		elif ip is not None:
@@ -145,13 +153,15 @@ class config:
 			self.connected_ip_addr[dvc] = str(_command_local_ip_helper(dvc))
 			return self.connected_ip_addr[dvc]
 
-def shell(_cmd, stdout=True):
+
+def shell(_cmd, stdout = True):
 	pipe = subprocess.check_output(_cmd, shell = False)
 	if stdout:
 		print(pipe.decode())
 	return pipe
 
-class command:
+
+class ADBCommand:
 	def __init__(self, value):
 		self.value = "adb " + value
 		self.pipe = None
@@ -166,8 +176,9 @@ class command:
 		self.output = self.pipe.decode()
 		return self.output
 
-class device_command:
-	def __init__(self, value, function=None):
+
+class ADBDeviceCommand:
+	def __init__(self, value, function = None):
 		self.value = value
 		self.pipe = None
 		self.output = None
@@ -176,7 +187,7 @@ class device_command:
 	def __repr__(self):
 		return self.output
 	
-	def call(self, *, dvc=None, stdout=True):
+	def call(self, *, dvc = None, stdout = True):
 		if dvc == "" or None:
 			return
 		if self.func is None:
@@ -188,68 +199,73 @@ class device_command:
 		self.output = self.pipe.decode()
 		return self.output
 
-class commands:
+
+class ADBCommands:
 	def __init__(self):
-		#Local Commands
-		self.start_server = command("start-server")
-		self.kill_server = command("kill-server")
-		self.devices = command("devices")
+		# Local Commands
+		self.start_server = ADBCommand("start-server")
+		self.kill_server = ADBCommand("kill-server")
+		self.devices = ADBCommand("devices")
 		
-		#Device Commands
-		self.mtp = device_command("shell svc usb setFunctions mtp true")
-		self.usb = device_command("usb", _command_usb_helper) #Disables the remote TCP/IP port
-		self.disconnect = device_command("disconnect", _command_disconnect_helper) #Disconnects from device locally
-		self.tcp_ip = device_command("tcpip", c.get_tcp_port)
-		self.connect = device_command("connect", _command_connect_helper)
-		self.local_ip = device_command("shell ip addr show wlan0")
-		self.android_id = device_command("shell settings get secure android_id")
+		# Device Commands
+		self.mtp = ADBDeviceCommand("shell svc usb setFunctions mtp true")
+		self.usb = ADBDeviceCommand("usb", _command_usb_helper)  # Disables the remote TCP/IP port
+		self.disconnect = ADBDeviceCommand("disconnect", _command_disconnect_helper)  # Disconnects from device locally
+		self.tcp_ip = ADBDeviceCommand("tcpip", c.get_tcp_port)
+		self.connect = ADBDeviceCommand("connect", _command_connect_helper)
+		self.local_ip = ADBDeviceCommand("shell ip addr show wlan0")
+		self.android_id = ADBDeviceCommand("shell settings get secure android_id")
 	
-	def get_devices(self, ignore_tcp=False, ignore_emulators=True):
+	def get_devices(self, ignore_tcp = False, ignore_emulators = True):
 		def get_device(string):
 			device_id = string.split("\t")[0]
 			if len(device_id) > 0:
 				return device_id.lstrip().rstrip()
-			
+		
 		device_list = []
 		
 		out = self.devices.call()
 		read = False
 		for line in out.split("\n"):
-			line=line.rstrip()
-			if line == "" or len(line)<1:
+			line = line.rstrip()
+			if line == "" or len(line) < 1:
 				continue
 			if "List of devices attached" in line:
 				read = True
 				continue
 			if "List of devices attached" not in line and read:
-				if not ignore_emulators and line.startswith("emulator"): #Emulator inclusive
+				if not ignore_emulators and line.startswith("emulator"):  # Emulator inclusive
 					device_list.append(get_device(line))
-				else: #Emulators are ignored
-					if not (ignore_tcp and ":" in line): #TCP is ignored
+				else:  # Emulators are ignored
+					if not (ignore_tcp and ":" in line):  # TCP is ignored
 						device_list.append(get_device(line))
-						
+		
 		return device_list
+
+
 # </editor-fold>
 
 # <editor-fold desc="Post-Initializers">
 cfg = Cfg(config_path = path)
 cache = Cfg(config_name = "device", config_path = path, extension_override = ".cache")
-c = config()
-cmd = commands()
+c = ADBConfig()
+cmd = ADBCommands()
 
-usb_scan_period="usb_scan_period"
-tcp_cache_scan_period="tcp_cache_scan_period"
-auto_tcp="auto_tcp"
-auto_mtp="auto_mtp"
+usb_scan_period = "usb_scan_period"
+tcp_cache_scan_period = "tcp_cache_scan_period"
+auto_tcp = "auto_tcp"
+auto_mtp = "auto_mtp"
+
 
 # <editor-fold desc="Default Config">
 def default_config():
-	cfg.write(usb_scan_period, "5", safe=True)
-	cfg.write(tcp_cache_scan_period, "60", safe=True)
+	cfg.write(usb_scan_period, "5", safe = True)
+	cfg.write(tcp_cache_scan_period, "60", safe = True)
 	cfg.write_flag(auto_tcp, True)
 	cfg.write_flag(auto_mtp, True)
 	cfg.commit()
-	
+
+
 # </editor-fold>
 
 cmd.start_server.call()
@@ -257,10 +273,11 @@ cmd.start_server.call()
 proceed = True
 shutdown = False
 
-#Passive loop with operational freeze support
+
+# Passive loop with operational freeze support
 def loop():
 	default_config()
-
+	
 	usb_scan = 0
 	usb_scan_limit = cfg.read(usb_scan_period)
 	automatic_tcp = cfg.read_flag(auto_tcp)
@@ -271,35 +288,36 @@ def loop():
 	
 	devices = set()
 	
-	tcp_scan_buffer = [] #Device process buffer because fuck complicated threads
+	tcp_scan_buffer = []  # Device process buffer because fuck complicated threads
 	tcp_scan_buffer_fill = True
 	
 	while not shutdown:
-		usb_scan, usb_scan_limit, automatic_tcp, automatic_mtp, tcp_scan, tcp_scan_limit, config_pass, devices, tcp_scan_buffer, tcp_scan_buffer_fill =\
+		usb_scan, usb_scan_limit, automatic_tcp, automatic_mtp, tcp_scan, tcp_scan_limit, config_pass, devices, tcp_scan_buffer, tcp_scan_buffer_fill = \
 			proceed_loop(usb_scan, usb_scan_limit, automatic_tcp, automatic_mtp, tcp_scan, tcp_scan_limit, config_pass, devices, tcp_scan_buffer, tcp_scan_buffer_fill)
 		time.sleep(1)
-		
-#Operational loop
+
+
+# Operational loop
 def proceed_loop(usb_s, usb_sl, a_tcp, a_mtp, tcp_s, tcp_sl, cp, dvc_set, tcp_buf, tcp_bf):
-	usb_scan, usb_scan_limit, automatic_tcp, automatic_mtp, tcp_scan, tcp_scan_limit, config_pass, devices, tcp_scan_buffer, tcp_scan_buffer_fill\
+	usb_scan, usb_scan_limit, automatic_tcp, automatic_mtp, tcp_scan, tcp_scan_limit, config_pass, devices, tcp_scan_buffer, tcp_scan_buffer_fill \
 		= usb_s, usb_sl, a_tcp, a_mtp, tcp_s, tcp_sl, cp, dvc_set, tcp_buf, tcp_bf
 	
 	server_started = False
 	while proceed:
-		if config_pass >= c.config_sleep: #write loop
+		if config_pass >= c.config_sleep:  # write loop
 			config_pass = 0
 			cfg.commit()
 			cache.commit()
 			usb_scan_limit = cfg.read(usb_scan_period)
 			tcp_scan_limit = cfg.read(tcp_cache_scan_period)
 			automatic_tcp = cfg.read_flag(auto_tcp)
-			#Assume TCP cache if auto TCP is enabled
+			# Assume TCP cache if auto TCP is enabled
 			automatic_mtp = cfg.read_flag(auto_mtp)
-			if automatic_mtp: #Enable MTP Cache if enabled, delete if disabled
-				cache.write("mtp_cache", "") #Clear MTP cache at every launch
+			if automatic_mtp:  # Enable MTP Cache if enabled, delete if disabled
+				cache.write("mtp_cache", "")  # Clear MTP cache at every launch
 			else:
 				cache.write("mtp_cache", None)
-		if not server_started: #TODO: Add a threaded server check, support kill-server detection
+		if not server_started:  # TODO: Add a threaded server check, support kill-server detection
 			cmd.start_server.call(stdout = False)
 			server_started = True
 		else:
@@ -307,17 +325,17 @@ def proceed_loop(usb_s, usb_sl, a_tcp, a_mtp, tcp_s, tcp_sl, cp, dvc_set, tcp_bu
 				usb_scan = 0
 				active_physical_devices = cmd.get_devices(ignore_tcp = True, ignore_emulators = True)
 				devices = devices.union(active_physical_devices)
-				devices = devices.union((dn if len(dn := cache.read("device_names", requireNonNull = True)) > 0 else "").split(",")) #This can introduce an empty string in the set
+				devices = devices.union((dn if len(dn := cache.read("device_names", require_non_null = True)) > 0 else "").split(","))  # This can introduce an empty string in the set
 				devices.discard("")
 				if len(devices) > 0:
 					cache.write("device_names", ",".join(devices))
 				for device in active_physical_devices:
 					# Update the TCP disk cache from memory cache on every USB pass
 					if automatic_tcp:
-						cmd.connect.call(dvc=device)
+						cmd.connect.call(dvc = device)
 						if cache.read(device + "_tcp_cache") != (ipa := _command_disconnect_helper(device)):
 							cache.write(device + "_tcp_cache", ipa)
-						
+				
 				if automatic_mtp:
 					if len(active_physical_devices) > 0:
 						mtpset = set()
@@ -328,7 +346,7 @@ def proceed_loop(usb_s, usb_sl, a_tcp, a_mtp, tcp_s, tcp_sl, cp, dvc_set, tcp_bu
 							except AttributeError:
 								pass
 							try:
-								mtpset.discard(*mtpset.difference(active_physical_devices)) #Remove disconnected physical devices (removes from cache)
+								mtpset.discard(*mtpset.difference(active_physical_devices))  # Remove disconnected physical devices (removes from cache)
 							except TypeError:
 								pass
 							if dvc not in mtpset:
@@ -336,31 +354,33 @@ def proceed_loop(usb_s, usb_sl, a_tcp, a_mtp, tcp_s, tcp_sl, cp, dvc_set, tcp_bu
 									cmd.mtp.call(dvc = dvc)
 									mtpset.add(dvc)
 								except subprocess.CalledProcessError:
-									#Physical device probably disconnected
+									# Physical device probably disconnected
 									pass
 						cache.write("mtp_cache", ",".join(mtpset))
 			
 			if int(tcp_scan) >= int(tcp_scan_limit) and automatic_tcp:
 				if tcp_scan_buffer_fill:
-					temp_buffer = (dn if len(dn := cache.read("device_names", requireNonNull = True)) > 0 else "").split(",")
-					tcp_scan_buffer = [x if (len(x) > 0 and not x.startswith("emulator") and not ":" in x) else x for x in temp_buffer]  # Filter non-usb devices
+					temp_buffer = (dn if len(dn := cache.read("device_names", require_non_null = True)) > 0 else "").split(",")
+					tcp_scan_buffer = [x if (len(x) > 0 and not x.startswith("emulator") and ":" not in x) else x for x in temp_buffer]  # Filter non-usb devices
 					tcp_scan_buffer_fill = False
 				
-				if l := len(tcp_scan_buffer) > 0:
+				if tcp_buffer_length := len(tcp_scan_buffer) > 0:
 					d = tcp_scan_buffer.pop()
 					cmd.tcp_ip.call(dvc = d)
 					cmd.connect.call(dvc = d)
-					if l == 1:
+					if tcp_buffer_length == 1:  # The actual value is 0 since the last value is popped after length assignment
 						tcp_scan = 0
 						tcp_scan_buffer_fill = True
-						
+			
 			usb_scan += 1
 			tcp_scan += 1
 			config_pass += 1
 			time.sleep(c.sleep)
-		
-	#Return final values for operation freeze
+	
+	# Return final values for operation freeze
 	return usb_scan, usb_scan_limit, automatic_tcp, automatic_mtp, tcp_scan, tcp_scan_limit, config_pass, devices, tcp_scan_buffer, tcp_scan_buffer_fill
+
+
 # </editor-fold
 
 if __name__ == "__main__":
