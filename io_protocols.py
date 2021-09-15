@@ -155,8 +155,10 @@ class ShadowFile(Utilities):
 		self._write(flag, value)
 		
 class Cfg(ShadowFile):
-	def __init__(self, config_name = "ADB_Tools", config_path = os.getcwd(), extension_override = None):
-		# TODO: Potential bug in handling existing extensions in filename
+	def __init__(self, config_name = "ADB_Tools", config_path = os.getcwd(), extension_override = None, strip_extensions = True):
+		if strip_extensions:
+			config_name = config_name.split(".")[0]
+		
 		if not config_name.endswith(".cfg"):
 			if extension_override is None:
 				config_name += ".cfg"
