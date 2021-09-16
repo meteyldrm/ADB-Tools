@@ -4,36 +4,33 @@ import random
 import time
 import os
 import sys
-import uuid
+from io_protocols import Cfg
 
 toast = False
-tray = False
 
 try:
 	# noinspection PyUnresolvedReferences
 	import win10toast
+	
 	toast = True
 except ImportError:
 	toast = False
-	
+
 try:
-	# noinspection PyUnresolvedReferences
-	import pystray
 	# noinspection PyUnresolvedReferences
 	from PIL import Image
 	# noinspection PyUnresolvedReferences
 	import base64
-	tray = True
 except ImportError:
-	print("importerror")
-	tray = False
+	print("Import Error")
 # </editor-fold>
 
 # <editor-fold desc="Initializers">
 try:
 	tst = win10toast.ToastNotifier()
-except:
+except Exception:
 	pass
+
 
 def resolve(_path):
 	if sys.platform == "win32":
@@ -44,9 +41,10 @@ def resolve(_path):
 	else:
 		return _path
 
+
 path = resolve(sys.path[0])
 
-#System argument processing
+# System argument processing
 for arg in sys.argv:
 	if "=" in arg:
 		arg_key, arg_value = arg.split("=")
@@ -58,21 +56,11 @@ for arg in sys.argv:
 
 os.chdir(path)
 
-#Ensure folder creation
+# Ensure folder creation
 try:
 	os.mkdir(os.path.join(path, "images"))
 except FileExistsError:
 	pass
-
-# noinspection SpellCheckingInspection
-png_256 = """
-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
-"""
-png_path = os.path.join(os.path.join(path, "images"), "png_256.png")
-png_icon = base64.decodebytes(png_256.encode())
-if not os.path.exists(png_path):
-	with open(png_path, "wb") as p:
-		p.write(base64.decodebytes(png_256.encode()))
 
 # noinspection SpellCheckingInspection
 ico_256 = """
@@ -84,206 +72,59 @@ if not os.path.exists(ico_path):
 	with open(ico_path, "wb") as p:
 		p.write(base64.decodebytes(ico_256.encode()))
 
-def toast(notification, title="ADB Tools", icon_path = ico_path, duration=3):
+
+def toast(notification, title = "ADB Tools", icon_path = ico_path, duration = 3):
 	try:
 		tst.show_toast(title, notification, icon_path, duration, threaded = True)
-	except:
+	except Exception:
 		pass
 
-def _assert_usb(dvc): #Is this a (currently) physically connected usb device
+
+def _assert_usb(dvc):  # Is this a (currently) physically connected usb device
 	return dvc in cmd.get_devices(True, True)
+
 
 def _command_connect_helper(dvc):
 	if _assert_usb(dvc):
 		c.ip_addr(dvc, ip = _command_local_ip_helper(dvc))
 		cmd.tcp_ip.call(dvc = dvc)
 		if cfg.read(auto_tcp) == "True":
-			cfg.write(dvc + "_tcp_cache", c.ip_addr(dvc) + ":" + c.get_tcp_port(dvc))
+			cache.write(dvc + "_tcp_cache", c.ip_addr(dvc) + ":" + c.get_tcp_port(dvc))
 		return c.ip_addr(dvc) + ":" + c.get_tcp_port(dvc)
+	
+	return cache.read(dvc + "_tcp_cache")
 
-	return cfg.read(dvc + "_tcp_cache")
 
 def _command_disconnect_helper(dvc):
 	return c.ip_addr(dvc) + ":" + c.get_tcp_port(dvc)
 
+
 def _command_usb_helper(dvc):
-	cfg.write(dvc + "_tcp_cache", None)
+	cache.write(dvc + "_tcp_cache", None)
 	return c.ip_addr(dvc) + ":" + c.get_tcp_port(dvc)
+
 
 def _command_local_ip_helper(dvc):
 	if dvc in c.connected_ip_addr.keys():
 		return c.ip_addr(dvc)
 	else:
-		result = cmd.local_ip.call(dvc=dvc)
+		result = cmd.local_ip.call(dvc = dvc)
 		result = result.strip()
 		for line in result.split("\n"):
 			line = line.strip()
 			if line.startswith("inet "):
-				l = line.split(" ")
-				return (l[1]).split("/")[0]
-	
-# </editor-fold>
+				line_split = line.split(" ")
+				return (line_split[1]).split("/")[0]
 
-# <editor-fold desc="Config Functionality">
-class Cfg:
-	temp_files = []
-	
-	# <editor-fold desc="Helper Functions">
-	@staticmethod
-	def _unify(string):
-		string = string.replace("\n", "")
-		if string.startswith("#"):
-			return "#" + string.lstrip("#").lstrip().rstrip()
-		elif "=" in string:
-			return "=".join([a.lstrip().rstrip() for a in string.split("=")])
-	
-	@staticmethod
-	def _resolve(_path):
-		if sys.platform == "win32":
-			if len(_path) > 255:
-				if not path.startswith("\\\\?\\"):
-					_path = "\\\\?\\" + _path
-			return _path
-		else:
-			return _path
-		
-	def _delete_temp_files(self):
-		for file in self.temp_files:
-			os.unlink(file)
-			self.temp_files.remove(file)
-			
-	# </editor-fold>
-	
-	#.cfg checks included
-	def create_file(self, name = None, mode = "r+", safe = True, *, expose = False):
-		if name is None:
-			name = str(uuid.uuid1()).replace("-", "") + ".cfg"
-			self.temp_files.append(os.path.join(self.main_path, name))
-		elif not name.endswith(".cfg"):
-			name += ".cfg"
-		
-		_path = os.path.join(self.main_path, name)
-		if not (safe and (os.path.exists(_path) and os.path.isfile(_path))):
-			open(_path, "w+").close()
-		if expose:
-			return open(_path, mode)
-		else:
-			return
-		
-	def read(self, key, *, requireNonNull = False):
-		with open(self.main_config, "r") as f:
-			for line in f:
-				if line.startswith("#"):
-					continue
-				line = self._unify(line)
-				if key in line:
-					if line.split("=")[0] == key:
-						return line.split("=")[1]
-					
-			return None if not requireNonNull else ""
-		
-	def read_flag(self, flag: str):
-		if not flag.startswith("#"):
-			flag = "#" + flag
-		with open(self.main_config, "r") as f:
-			for line in f:
-				if self._unify(line) == flag:
-					return True
-			return False
-		
-	def write(self, key, value, safe = False):
-		#Safe mode ensures the existence of the key, used to create the default config
-		#Value == None behavior is undefined in safe mode, nothing is changed
-		#Safe == False is normal override behavior
-		with open(self.main_config, "r+") as f:
-			f.seek(0)
-			if safe: #Ensure safe mode safety
-				for line in f:
-					if key == self._unify(line).split("=")[0]:
-						return
 
-				f.seek(0)
-			with self.create_file(expose = True) as temp:
-				temp.seek(0)
-				append = True
-				for line in f:
-					line = self._unify(line)
-					if line.split("=")[0] != key:
-						temp.write(line + "\n")
-					else:
-						append = False
-						if value is not None and not safe:
-							temp.write(key + "=" + value + "\n")
-						else:
-							continue
-				if append:
-					if value is not None:
-						temp.write(key + "=" + value + "\n")
-				f.flush()
-				os.fsync(f)
-				temp.flush()
-				os.fsync(temp)
-				f.truncate(0)
-				f.seek(0)
-				temp.seek(0)
-				for line in temp:
-					f.write(line)
-				f.flush()
-				os.fsync(f)
-		self._delete_temp_files()
-		
-	def write_flag(self, flag: str, value: bool):
-		if not flag.startswith("#"):
-			flag = "#" + flag
-		with open(self.main_config, "r+") as f:
-			f.seek(0)
-			with self.create_file(expose = True) as temp:
-				f.seek(0)
-				temp.seek(0)
-				append = value
-				for line in f:
-					if line.startswith("#"):
-						line = self._unify(line)
-						if flag == line:
-							if value:
-								temp.write(line + "\n")
-								append = False
-							else:
-								continue
-						else:
-							temp.write(line + "\n")
-				if append:
-					temp.write(flag + "\n")
-				
-				f.flush()
-				os.fsync(f)
-				temp.flush()
-				os.fsync(temp)
-				f.truncate(0)
-				f.seek(0)
-				temp.seek(0)
-				for line in temp:
-					f.write(line)
-				f.flush()
-				os.fsync(f)
-		self._delete_temp_files()
-	
-	def __init__(self, config_name = "ADB_Tools", config_path = os.getcwd()):
-		if not config_name.endswith(".cfg"):
-			config_name += ".cfg"
-		self.config_name = config_name
-		self.main_path = self._resolve(config_path)
-		self.main_config = os.path.join(self.main_path, self.config_name)
-		self.create_file(self.main_config)
 # </editor-fold>
 
 # <editor-fold desc="ADB Skeleton">
-#TODO: Add external file modification detection
-class config:
+class ADBConfig:
 	sleep = 1
 	config_sleep = 15
 	tcp_port = "50155"
-	tcp_port_range=(50001,63000)
+	tcp_port_range = (50001, 63000)
 	random_port = False
 	
 	connected_ip_addr = {}
@@ -302,22 +143,25 @@ class config:
 				self.tcp_port = str(random.randint(*self.tcp_port_range, 2))
 			self.used_tcp_ports[dvc] = self.tcp_port
 			return self.tcp_port
-		
-	def ip_addr(self, dvc, ip=None):
+	
+	def ip_addr(self, dvc, ip = None):
 		if dvc in self.connected_ip_addr.keys():
 			return self.connected_ip_addr[dvc]
 		elif ip is not None:
 			self.connected_ip_addr[dvc] = str(ip)
 		else:
 			self.connected_ip_addr[dvc] = str(_command_local_ip_helper(dvc))
+			return self.connected_ip_addr[dvc]
 
-def shell(_cmd, stdout=True):
+
+def shell(_cmd, stdout = True):
 	pipe = subprocess.check_output(_cmd, shell = False)
 	if stdout:
 		print(pipe.decode())
 	return pipe
 
-class command:
+
+class ADBCommand:
 	def __init__(self, value):
 		self.value = "adb " + value
 		self.pipe = None
@@ -332,8 +176,9 @@ class command:
 		self.output = self.pipe.decode()
 		return self.output
 
-class device_command:
-	def __init__(self, value, function=None):
+
+class ADBDeviceCommand:
+	def __init__(self, value, function = None):
 		self.value = value
 		self.pipe = None
 		self.output = None
@@ -342,7 +187,7 @@ class device_command:
 	def __repr__(self):
 		return self.output
 	
-	def call(self, *, dvc=None, stdout=True):
+	def call(self, *, dvc = None, stdout = True):
 		if dvc == "" or None:
 			return
 		if self.func is None:
@@ -354,66 +199,73 @@ class device_command:
 		self.output = self.pipe.decode()
 		return self.output
 
-class commands:
+
+class ADBCommands:
 	def __init__(self):
-		#Local Commands
-		self.start_server = command("start-server")
-		self.kill_server = command("kill-server")
-		self.devices = command("devices")
+		# Local Commands
+		self.start_server = ADBCommand("start-server")
+		self.kill_server = ADBCommand("kill-server")
+		self.devices = ADBCommand("devices")
 		
-		#Device Commands
-		self.mtp = device_command("shell svc usb setFunctions mtp true")
-		self.usb = device_command("usb", _command_usb_helper) #Disables the remote TCP/IP port
-		self.disconnect = device_command("disconnect", _command_disconnect_helper) #Disconnects from device locally
-		self.tcp_ip = device_command("tcpip", c.get_tcp_port)
-		self.connect = device_command("connect", _command_connect_helper)
-		self.local_ip = device_command("shell ip addr show wlan0")
-		self.android_id = device_command("shell settings get secure android_id")
+		# Device Commands
+		self.mtp = ADBDeviceCommand("shell svc usb setFunctions mtp true")
+		self.usb = ADBDeviceCommand("usb", _command_usb_helper)  # Disables the remote TCP/IP port
+		self.disconnect = ADBDeviceCommand("disconnect", _command_disconnect_helper)  # Disconnects from device locally
+		self.tcp_ip = ADBDeviceCommand("tcpip", c.get_tcp_port)
+		self.connect = ADBDeviceCommand("connect", _command_connect_helper)
+		self.local_ip = ADBDeviceCommand("shell ip addr show wlan0")
+		self.android_id = ADBDeviceCommand("shell settings get secure android_id")
 	
-	def get_devices(self, ignore_tcp=False, ignore_emulators=True):
+	def get_devices(self, ignore_tcp = False, ignore_emulators = True):
 		def get_device(string):
 			device_id = string.split("\t")[0]
 			if len(device_id) > 0:
 				return device_id.lstrip().rstrip()
-			
+		
 		device_list = []
 		
 		out = self.devices.call()
 		read = False
 		for line in out.split("\n"):
-			line=line.rstrip()
-			if line == "" or len(line)<1:
+			line = line.rstrip()
+			if line == "" or len(line) < 1:
 				continue
 			if "List of devices attached" in line:
 				read = True
 				continue
 			if "List of devices attached" not in line and read:
-				if not ignore_emulators and line.startswith("emulator"): #Emulator inclusive
+				if not ignore_emulators and line.startswith("emulator"):  # Emulator inclusive
 					device_list.append(get_device(line))
-				else: #Emulators are ignored
-					if not (ignore_tcp and ":" in line): #TCP is ignored
+				else:  # Emulators are ignored
+					if not (ignore_tcp and ":" in line):  # TCP is ignored
 						device_list.append(get_device(line))
-						
+		
 		return device_list
+
+
 # </editor-fold>
 
 # <editor-fold desc="Post-Initializers">
-cfg = Cfg()
-c = config()
-cmd = commands()
+cfg = Cfg(config_path = path)
+cache = Cfg(config_name = "device", config_path = path, extension_override = ".cache")
+c = ADBConfig()
+cmd = ADBCommands()
 
-usb_scan_period="usb_scan_period"
-tcp_cache_scan_period="tcp_cache_scan_period"
-auto_tcp="auto_tcp"
-auto_mtp="auto_mtp"
+usb_scan_period = "usb_scan_period"
+tcp_cache_scan_period = "tcp_cache_scan_period"
+auto_tcp = "auto_tcp"
+auto_mtp = "auto_mtp"
+
 
 # <editor-fold desc="Default Config">
 def default_config():
-	cfg.write(usb_scan_period, "5", safe=True)
-	cfg.write(tcp_cache_scan_period, "60", safe=True)
-	cfg.write_flag(auto_tcp, False)
-	cfg.write_flag(auto_mtp, False)
-	
+	cfg.write(usb_scan_period, "5", safe = True)
+	cfg.write(tcp_cache_scan_period, "60", safe = True)
+	cfg.write_flag(auto_tcp, True)
+	cfg.write_flag(auto_mtp, True)
+	cfg.commit()
+
+
 # </editor-fold>
 
 cmd.start_server.call()
@@ -421,140 +273,115 @@ cmd.start_server.call()
 proceed = True
 shutdown = False
 
-def setup(_icon: pystray.Icon):
-	_icon.visible = True
-	loop()
-	_icon.stop()
 
-#Passive loop with operational freeze support
+# Passive loop with operational freeze support
 def loop():
 	default_config()
-
-	usb_scan = 5
-	usb_scan_limit = 0
+	
+	usb_scan = 0
+	usb_scan_limit = cfg.read(usb_scan_period)
 	automatic_tcp = cfg.read_flag(auto_tcp)
 	automatic_mtp = cfg.read_flag(auto_mtp)
-	tcp_scan = 50
-	tcp_scan_limit = 0
+	tcp_scan = 0
+	tcp_scan_limit = cfg.read(tcp_cache_scan_period)
 	config_pass = 0
 	
 	devices = set()
 	
-	tcp_scan_buffer = [] #Device process buffer because fuck complicated threads
+	tcp_scan_buffer = []  # Device process buffer because fuck complicated threads
 	tcp_scan_buffer_fill = True
 	
 	while not shutdown:
-		usb_scan, usb_scan_limit, automatic_tcp, automatic_mtp, tcp_scan, tcp_scan_limit, config_pass, devices, tcp_scan_buffer, tcp_scan_buffer_fill =\
+		usb_scan, usb_scan_limit, automatic_tcp, automatic_mtp, tcp_scan, tcp_scan_limit, config_pass, devices, tcp_scan_buffer, tcp_scan_buffer_fill = \
 			proceed_loop(usb_scan, usb_scan_limit, automatic_tcp, automatic_mtp, tcp_scan, tcp_scan_limit, config_pass, devices, tcp_scan_buffer, tcp_scan_buffer_fill)
 		time.sleep(1)
-		
-#Operational loop
+
+
+# Operational loop
 def proceed_loop(usb_s, usb_sl, a_tcp, a_mtp, tcp_s, tcp_sl, cp, dvc_set, tcp_buf, tcp_bf):
-	usb_scan, usb_scan_limit, automatic_tcp, automatic_mtp, tcp_scan, tcp_scan_limit, config_pass, devices, tcp_scan_buffer, tcp_scan_buffer_fill\
+	usb_scan, usb_scan_limit, automatic_tcp, automatic_mtp, tcp_scan, tcp_scan_limit, config_pass, devices, tcp_scan_buffer, tcp_scan_buffer_fill \
 		= usb_s, usb_sl, a_tcp, a_mtp, tcp_s, tcp_sl, cp, dvc_set, tcp_buf, tcp_bf
 	
+	server_started = False
 	while proceed:
-		if config_pass >= c.config_sleep:
+		if config_pass >= c.config_sleep:  # write loop
 			config_pass = 0
-			if cfg.read_flag("stop"):
-				break
+			cfg.commit()
+			cache.commit()
 			usb_scan_limit = cfg.read(usb_scan_period)
 			tcp_scan_limit = cfg.read(tcp_cache_scan_period)
 			automatic_tcp = cfg.read_flag(auto_tcp)
-			#Assume TCP cache if auto TCP is enabled
+			# Assume TCP cache if auto TCP is enabled
 			automatic_mtp = cfg.read_flag(auto_mtp)
-			if automatic_mtp: #Enable MTP Cache if enabled, delete if disabled
-				cfg.write("mtp_cache", "") #Clear MTP cache at every launch
+			if automatic_mtp:  # Enable MTP Cache if enabled, delete if disabled
+				cache.write("mtp_cache", "")  # Clear MTP cache at every launch
 			else:
-				cfg.write("mtp_cache", None)
-		
-		if int(usb_scan) >= int(usb_scan_limit):
-			usb_scan = 0
-			active_physical_devices = cmd.get_devices(ignore_tcp = True, ignore_emulators = True)
-			devices = devices.union(active_physical_devices)
-			devices = devices.union((dn if len(dn := cfg.read("device_names", requireNonNull = True)) > 0 else "").split(",")) #This can introduce an empty string in the set
-			devices.discard("")
-			if len(devices) > 0:
-				cfg.write("device_names", ",".join(devices))
-			for device in active_physical_devices:
-				# Update the TCP disk cache from memory cache on every USB pass
-				if automatic_tcp:
-					if cfg.read(device + "_tcp_cache") != (ipa := _command_disconnect_helper(device)):
-						cfg.write(device + "_tcp_cache", ipa)
+				cache.write("mtp_cache", None)
+		if not server_started:  # TODO: Add a threaded server check, support kill-server detection
+			cmd.start_server.call(stdout = False)
+			server_started = True
+		else:
+			if int(usb_scan) >= int(usb_scan_limit):
+				usb_scan = 0
+				active_physical_devices = cmd.get_devices(ignore_tcp = True, ignore_emulators = True)
+				devices = devices.union(active_physical_devices)
+				devices = devices.union((dn if len(dn := cache.read("device_names", require_non_null = True)) > 0 else "").split(","))  # This can introduce an empty string in the set
+				devices.discard("")
+				if len(devices) > 0:
+					cache.write("device_names", ",".join(devices))
+				for device in active_physical_devices:
+					# Update the TCP disk cache from memory cache on every USB pass
+					if automatic_tcp:
+						cmd.connect.call(dvc = device)
+						if cache.read(device + "_tcp_cache") != (ipa := _command_disconnect_helper(device)):
+							cache.write(device + "_tcp_cache", ipa)
+				
+				if automatic_mtp:
+					if len(active_physical_devices) > 0:
+						mtpset = set()
+						for dvc in active_physical_devices:
+							try:
+								for n in cache.read("mtp_cache").split(","):
+									mtpset.add(n)
+							except AttributeError:
+								pass
+							try:
+								mtpset.discard(*mtpset.difference(active_physical_devices))  # Remove disconnected physical devices (removes from cache)
+							except TypeError:
+								pass
+							if dvc not in mtpset:
+								try:
+									cmd.mtp.call(dvc = dvc)
+									mtpset.add(dvc)
+								except subprocess.CalledProcessError:
+									# Physical device probably disconnected
+									pass
+						cache.write("mtp_cache", ",".join(mtpset))
 			
-			if automatic_mtp:
-				if len(active_physical_devices) > 0:
-					mtpset = set()
-					for dvc in active_physical_devices:
-						mtpset.add(*cfg.read("mtp_cache").split(","))
-						mtpset.discard(*mtpset.difference(active_physical_devices)) #Remove disconnected physical devices (removes from cache)
-						if dvc not in mtpset:
-							cmd.mtp.call(dvc = dvc)
-							mtpset.add(dvc)
-					cfg.write("mtp_cache", ",".join(*mtpset))
-		
-		if int(tcp_scan) >= int(tcp_scan_limit) and automatic_tcp:
-			if tcp_scan_buffer_fill:
-				temp_buffer = (dn if len(dn := cfg.read("device_names", requireNonNull = True)) > 0 else "").split(",")
-				tcp_scan_buffer = [x if (len(x) > 0 and not x.startswith("emulator") and not ":" in x) else x for x in temp_buffer]  # Filter non-usb devices
-				tcp_scan_buffer_fill = False
+			if int(tcp_scan) >= int(tcp_scan_limit) and automatic_tcp:
+				if tcp_scan_buffer_fill:
+					temp_buffer = (dn if len(dn := cache.read("device_names", require_non_null = True)) > 0 else "").split(",")
+					tcp_scan_buffer = [x if (len(x) > 0 and not x.startswith("emulator") and ":" not in x) else x for x in temp_buffer]  # Filter non-usb devices
+					tcp_scan_buffer_fill = False
+				
+				if tcp_buffer_length := len(tcp_scan_buffer) > 0:
+					d = tcp_scan_buffer.pop()
+					cmd.tcp_ip.call(dvc = d)
+					cmd.connect.call(dvc = d)
+					if tcp_buffer_length == 1:  # The actual value is 0 since the last value is popped after length assignment
+						tcp_scan = 0
+						tcp_scan_buffer_fill = True
 			
-			if l := len(tcp_scan_buffer) > 0:
-				d = tcp_scan_buffer.pop()
-				cmd.tcp_ip.call(dvc = d)
-				cmd.connect.call(dvc = d)
-				if l == 1:
-					tcp_scan = 0
-					tcp_scan_buffer_fill = True
-					
-		usb_scan += 1
-		tcp_scan += 1
-		config_pass += 1
-		time.sleep(c.sleep)
-		
-	#Return final values for operation freeze
-	return usb_scan, usb_scan_limit, automatic_tcp, automatic_mtp, tcp_scan, tcp_scan_limit, config_pass, devices, tcp_scan_buffer, tcp_scan_buffer_fill
+			usb_scan += 1
+			tcp_scan += 1
+			config_pass += 1
+			time.sleep(c.sleep)
 	
-# </editor-fold>
-
-# <editor-fold desc="Pystray Declarations">
-ps_menu_buffer = []
-
-def ps_enabled_click(icon, item: pystray.MenuItem):
-	global proceed
-	proceed = not item.checked
-
-ps_menu_buffer.append(pystray.MenuItem("Enabled", ps_enabled_click, lambda item: proceed))
-
-ps_auto_tcp_flag = cfg.read_flag(auto_tcp)
-
-def ps_auto_tcp(icon, item: pystray.MenuItem):
-	global ps_auto_tcp_flag
-	ps_auto_tcp_flag = not item.checked
-	cfg.write_flag(auto_tcp, ps_auto_tcp_flag)
-
-ps_menu_buffer.append(pystray.MenuItem("Auto TCP", ps_auto_tcp, lambda item: ps_auto_tcp_flag))
+	# Return final values for operation freeze
+	return usb_scan, usb_scan_limit, automatic_tcp, automatic_mtp, tcp_scan, tcp_scan_limit, config_pass, devices, tcp_scan_buffer, tcp_scan_buffer_fill
 
 
-def pass_function(*args):
-	pass
+# </editor-fold
 
-_tcp_filters = []
-
-__p_menu_buffer = [pystray.MenuItem("Filter 1", pass_function), pystray.MenuItem("Filter 2", pass_function)]
-_p = pystray.MenuItem("Auto TCP Filters", pystray.Menu(*__p_menu_buffer))
-ps_menu_buffer.append(_p)
-# </editor-fold>
-
-#TODO: Enable Pystray functionality
-tray = False
-
-if tray:
-	i = pystray.Icon(name="ADB Tools", title="ADB Tools")
-	rgba_image = Image.open(png_path)
-	rgba_image.load()
-	i.icon = rgba_image
-	i.menu = pystray.Menu(*ps_menu_buffer)
-	i.run(setup)
-else:
+if __name__ == "__main__":
 	loop()
