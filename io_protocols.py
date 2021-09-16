@@ -128,7 +128,7 @@ class ShadowFile(Utilities):
 			d += "\n"
 		return d
 	
-	def commit(self):  # TODO: Add file clash check before writing, this enables modification detection when comparing to internal data.
+	def commit(self):  # Simply don't update the config file while the app is running
 		data = self._extract()
 		with open(super()._ensure_file(self._own_path), "r+") as f:
 			super()._clear_file(self._own_path)
